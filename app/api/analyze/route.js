@@ -60,6 +60,8 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model: process.env.MOONSHOT_MODEL || "kimi-k2.6",
+        thinking: { type: "disabled" },
+        max_tokens: 1600,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -71,7 +73,7 @@ export async function POST(request) {
           },
         ],
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),
     });
 
     const payload = await response.json().catch(() => ({}));
@@ -82,7 +84,7 @@ export async function POST(request) {
     if (typeof content !== "string") throw new Error("Kimi API 没有返回分析内容");
     return NextResponse.json(normalize(parseJson(content)));
   } catch (error) {
-    const message = error?.name === "TimeoutError" ? "AI 分析超时，请重试" : (error?.message || "分析失败");
+    const message = error?.name === "TimeoutError" ? "AI 分析超过 120 秒，请换一张较小的图片后重试" : (error?.message || "分析失败");
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
