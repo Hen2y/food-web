@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: food-web
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: MOONSHOT_API_KEY
+        sync: false
+      - key: MOONSHOT_BASE_URL
+        value: https://api.moonshot.ai/v1
+      - key: MOONSHOT_MODEL
+        value: kimi-k2.5
