@@ -60,7 +60,6 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model: process.env.MOONSHOT_MODEL || "kimi-k2.6",
-        temperature: 0.1,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
