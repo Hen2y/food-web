@@ -51,7 +51,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "请上传不超过约 7MB 的图片" }, { status: 400 });
     }
 
-    const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.ai/v1").replace(/\/$/, "");
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -59,7 +59,7 @@ export async function POST(request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.MOONSHOT_MODEL || "kimi-k2.5",
+        model: process.env.MOONSHOT_MODEL || "kimi-k2.6",
         temperature: 0.1,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },

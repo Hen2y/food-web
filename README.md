@@ -26,8 +26,8 @@ npm run dev
 
 以下两项已写入 `render.yaml`，通常无需手动填写：
 
-- `MOONSHOT_BASE_URL`：`https://api.moonshot.ai/v1`
-- `MOONSHOT_MODEL`：`kimi-k2.5`
+- `MOONSHOT_BASE_URL`：`https://api.moonshot.cn/v1`
+- `MOONSHOT_MODEL`：`kimi-k2.6`
 
 Render 使用的命令：
 

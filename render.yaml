@@ -9,6 +9,6 @@ services:
       - key: MOONSHOT_API_KEY
         sync: false
       - key: MOONSHOT_BASE_URL
-        value: https://api.moonshot.ai/v1
+        value: https://api.moonshot.cn/v1
       - key: MOONSHOT_MODEL
-        value: kimi-k2.5
+        value: kimi-k2.6
