@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>盤安 SafePlate｜AI 食安檢測系統</title>
+  <style>
+    :root{
+      --bg:#f4f8fb;
+      --panel:#ffffff;
+      --panel-2:#f8fbfd;
+      --text:#17212f;
+      --muted:#73808f;
+      --line:#e5edf3;
+      --green:#15a779;
+      --green-2:#e8f8f2;
+      --blue:#2f78d6;
+      --blue-2:#eaf2ff;
+      --amber:#c78312;
+      --amber-2:#fff5de;
+      --red:#d94b4b;
+      --red-2:#fff0f0;
+      --shadow:0 20px 60px rgba(18, 38, 63, .08);
+      --soft-shadow:0 10px 30px rgba(18, 38, 63, .07);
+      --radius:22px;
+      --radius-sm:14px;
+      --sidebar:280px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;
+      color:var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(21,167,121,.10), transparent 28%),
+        radial-gradient(circle at 90% 0%, rgba(47,120,214,.12), transparent 28%),
+        linear-gradient(135deg,#f7fbfd,#eef6f8 48%,#f8fbfd);
+      overflow:hidden;
+    }
+
+    button,input,select,textarea{font:inherit}
+    button{border:0;cursor:pointer}
+    .app{
+      display:grid;
+      grid-template-columns:var(--sidebar) 1fr;
+      height:100vh;
+      padding:18px;
+      gap:18px;
+    }
+
+    /* Sidebar */
+    .sidebar{
+      background:rgba(255,255,255,.86);
+      border:1px solid rgba(229,237,243,.9);
+      box-shadow:var(--shadow);
+      border-radius:28px;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      backdrop-filter: blur(18px);
+    }
+    .brand{
+      padding:24px 22px 18px;
+      border-bottom:1px solid var(--line);
+    }
+    .logo{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    .logo-mark{
+      width:46px;height:46px;border-radius:15px;
+      display:grid;place-items:center;
+      color:#fff;
+      background:linear-gradient(135deg,var(--green),#74dcb9);
+      box-shadow:0 14px 30px rgba(21,167,121,.28);
+      font-weight:900;
+      letter-spacing:-.08em;
+    }
+    .logo-text h1{font-size:20px;margin:0 0 3px;font-weight:850;letter-spacing:-.02em}
+    .logo-text p{margin:0;color:var(--muted);font-size:12px}
+    .pill-row{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{
+      font-size:12px;
+      border-radius:999px;
+      padding:6px 10px;
+      background:var(--green-2);
+      color:#087356;
+      border:1px solid rgba(21,167,121,.16);
+      font-weight:650;
+    }
+
+    .nav{
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:7px;
+    }
+    .nav button{
+      width:100%;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:13px 14px;
+      border-radius:16px;
+      background:transparent;
+      color:#536070;
+      text-align:left;
+      font-weight:700;
+      transition:.2s ease;
+    }
+    .nav button svg{width:20px;height:20px;opacity:.8}
+    .nav button:hover{background:#f3f8fa;color:#152335}
+    .nav button.active{
+      background:linear-gradient(135deg,rgba(21,167,121,.13),rgba(47,120,214,.08));
+      color:#0b7558;
+      box-shadow:inset 0 0 0 1px rgba(21,167,121,.15);
+    }
+
+    .sidebar-footer{
+      margin-top:auto;
+      padding:16px;
+      border-top:1px solid var(--line);
+    }
+    .mini-card{
+      background:linear-gradient(135deg,#f7fbfa,#edf8f4);
+      border:1px solid rgba(21,167,121,.13);
+      border-radius:20px;
+      padding:15px;
+    }
+    .mini-card .label{font-size:12px;color:var(--muted);margin-bottom:7px}
+    .mini-card .value{font-size:15px;font-weight:800}
+    .mini-actions{display:flex;gap:8px;margin-top:12px}
+    .mini-actions button{flex:1;padding:9px 10px;border-radius:12px;font-size:12px;font-weight:800;background:#fff;color:#156c54;border:1px solid rgba(21,167,121,.16)}
+
+    /* Main */
+    .main{
+      display:flex;
+      flex-direction:column;
+      min-width:0;
+      overflow:hidden;
+    }
+    .topbar{
+      height:76px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:18px;
+      padding:0 4px 0 0;
+    }
+    .title-block h2{
+      font-size:28px;
+      margin:0 0 5px;
+      letter-spacing:-.035em;
+    }
+    .title-block p{
+      margin:0;
+      color:var(--muted);
+      font-size:14px;
+    }
+    .top-actions{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .chip{
+      padding:10px 13px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(255,255,255,.72);
+      color:#526170;
+      font-size:13px;
+      font-weight:750;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      white-space:nowrap;
+    }
+    .dot{
+      width:9px;height:9px;border-radius:999px;
+      background:var(--green);
+      box-shadow:0 0 0 5px rgba(21,167,121,.12);
+    }
+    .btn{
+      padding:12px 16px;
+      border-radius:15px;
+      font-weight:850;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:9px;
+      transition:.2s ease;
+      white-space:nowrap;
+    }
+    .btn:hover{transform:translateY(-1px)}
+    .btn-primary{
+      background:linear-gradient(135deg,var(--green),#32c99a);
+      color:#fff;
+      box-shadow:0 14px 30px rgba(21,167,121,.26);
+    }
+    .btn-blue{
+      background:linear-gradient(135deg,var(--blue),#6aa4ef);
+      color:#fff;
+      box-shadow:0 14px 30px rgba(47,120,214,.20);
+    }
+    .btn-ghost{
+      background:#fff;
+      color:#405064;
+      border:1px solid var(--line);
+      box-shadow:0 10px 20px rgba(18,38,63,.04);
+    }
+    .content{
+      flex:1;
+      overflow:auto;
+      padding:4px 4px 24px 0;
+    }
+    .page{display:none}
+    .page.active{display:block}
+    .grid{
+      display:grid;
+      gap:18px;
+    }
+    .grid-dashboard{
+      grid-template-columns:1.18fr .82fr;
+      align-items:start;
+    }
+    .grid-three{
+      grid-template-columns:repeat(3,1fr);
+    }
+    .grid-two{
+      grid-template-columns:repeat(2,1fr);
+    }
+
+    .card{
+      background:rgba(255,255,255,.88);
+      border:1px solid rgba(229,237,243,.95);
+      border-radius:var(--radius);
+      box-shadow:var(--soft-shadow);
+      backdrop-filter:blur(16px);
+      overflow:hidden;
+    }
+    .card-pad{padding:20px}
+    .card-header{
+      padding:18px 20px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+    }
+    .card-header h3{
+      margin:0;
+      font-size:17px;
+      letter-spacing:-.02em;
+    }
+    .card-header span{
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .metric{
+      padding:19px;
+      min-height:132px;
+      position:relative;
+      overflow:hidden;
+    }
+    .metric:before{
+      content:"";
+      position:absolute;
+      inset:auto -40px -55px auto;
+      width:140px;height:140px;border-radius:50%;
+      background:rgba(21,167,121,.08);
+    }
+    .metric .icon{
+      width:38px;height:38px;border-radius:13px;
+      display:grid;place-items:center;
+      margin-bottom:16px;
+      background:#f3f8fa;color:var(--green);
+    }
+    .metric .num{
+      font-size:30px;
+      font-weight:900;
+      letter-spacing:-.04em;
+      margin-bottom:5px;
+    }
+    .metric .name{font-size:13px;color:var(--muted);font-weight:700}
+    .metric.red .icon{background:var(--red-2);color:var(--red)}
+    .metric.blue .icon{background:var(--blue-2);color:var(--blue)}
+    .metric.amber .icon{background:var(--amber-2);color:var(--amber)}
+
+    /* Detection workspace */
+    .workspace{
+      display:grid;
+      grid-template-columns: minmax(420px, 1fr) 420px;
+      gap:18px;
+      align-items:start;
+    }
+    .upload-zone{
+      border:1.5px dashed #cad7e2;
+      border-radius:22px;
+      min-height:420px;
+      background:
+        linear-gradient(180deg, rgba(248,251,253,.72),rgba(255,255,255,.94)),
+        repeating-linear-gradient(90deg, transparent 0 38px, rgba(47,120,214,.03) 38px 39px),
+        repeating-linear-gradient(0deg, transparent 0 38px, rgba(47,120,214,.03) 38px 39px);
+      position:relative;
+      overflow:hidden;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+    }
+    .upload-zone.has-image{border-style:solid;background:#101827}
+    .upload-placeholder{
+      text-align:center;
+      padding:32px;
+      color:#536070;
+    }
+    .upload-icon{
+      width:84px;height:84px;border-radius:28px;
+      margin:0 auto 18px;
+      display:grid;place-items:center;
+      color:#fff;
+      background:linear-gradient(135deg,var(--green),#44d0a3);
+      box-shadow:0 20px 45px rgba(21,167,121,.26);
+    }
+    .upload-placeholder h3{margin:0 0 8px;font-size:23px;letter-spacing:-.03em}
+    .upload-placeholder p{margin:0;color:var(--muted);line-height:1.7}
+    #previewImage{
+      display:none;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      position:absolute;
+      inset:0;
+    }
+    .scan-frame{
+      display:none;
+      position:absolute;
+      inset:28px;
+      border:2px solid rgba(255,255,255,.55);
+      border-radius:22px;
+      pointer-events:none;
+    }
+    .scan-frame:before,.scan-frame:after{
+      content:"";
+      position:absolute;
+      width:46px;height:46px;
+      border-color:#fff;
+      border-style:solid;
+    }
+    .scan-frame:before{left:-2px;top:-2px;border-width:4px 0 0 4px;border-radius:14px 0 0 0}
+    .scan-frame:after{right:-2px;bottom:-2px;border-width:0 4px 4px 0;border-radius:0 0 14px 0}
+    .upload-zone.has-image .scan-frame{display:block}
+    .bbox{
+      display:none;
+      position:absolute;
+      border:2px solid;
+      border-radius:12px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.10);
+    }
+    .bbox.red{border-color:#ff6565;left:58%;top:47%;width:23%;height:21%}
+    .bbox.amber{border-color:#f2ad3d;left:12%;top:21%;width:31%;height:20%}
+    .bbox .tag{
+      position:absolute;
+      left:0;top:-38px;
+      color:#fff;
+      padding:8px 10px;
+      border-radius:12px;
+      font-size:12px;
+      font-weight:900;
+      white-space:nowrap;
+      box-shadow:0 10px 20px rgba(0,0,0,.18);
+    }
+    .bbox.red .tag{background:var(--red)}
+    .bbox.amber .tag{background:var(--amber)}
+    .upload-zone.analyzed .bbox{display:block}
+    .bbox.dynamic{display:block;z-index:4;min-width:48px;min-height:34px}
+    .bbox.dynamic.red{border-color:#ff6565}
+    .bbox.dynamic.amber{border-color:#f2ad3d}
+    .bbox-layer{position:absolute;inset:0;pointer-events:none;z-index:4}
+
+    .analysis-panel{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .select-row{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .field label{
+      display:block;
+      font-size:12px;
+      font-weight:850;
+      color:#556273;
+      margin:0 0 7px;
+    }
+    .field select,.field input,.field textarea{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px 13px;
+      background:#fff;
+      outline:none;
+      color:var(--text);
+    }
+    .field textarea{min-height:90px;resize:vertical}
+
+    .allergen-tags{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .tag-check{
+      position:relative;
+    }
+    .tag-check input{display:none}
+    .tag-check span{
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      padding:9px 11px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:#fff;
+      color:#4c5d70;
+      font-size:13px;
+      font-weight:800;
+      transition:.2s;
+    }
+    .tag-check input:checked + span{
+      background:var(--amber-2);
+      border-color:rgba(199,131,18,.30);
+      color:#8a5600;
+    }
+
+    .result-card{
+      border-radius:20px;
+      padding:16px;
+      border:1px solid var(--line);
+      background:#fff;
+    }
+    .risk-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .risk-badge{
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      display:inline-flex;
+      gap:6px;
+      align-items:center;
+    }
+    .risk-badge.high{background:var(--red-2);color:var(--red)}
+    .risk-badge.medium{background:var(--amber-2);color:var(--amber)}
+    .risk-badge.safe{background:var(--green-2);color:var(--green)}
+    .score{
+      font-size:34px;
+      font-weight:950;
+      letter-spacing:-.05em;
+    }
+    .result-list{
+      display:flex;
+      flex-direction:column;
+      gap:9px;
+      margin:12px 0 0;
+    }
+    .result-item{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      padding:11px;
+      border-radius:14px;
+      background:#f8fbfd;
+      border:1px solid #edf3f6;
+    }
+    .result-item .bullet{
+      width:24px;height:24px;border-radius:9px;
+      display:grid;place-items:center;
+      flex:0 0 auto;
+      font-weight:900;
+      font-size:12px;
+    }
+    .result-item.red .bullet{background:var(--red-2);color:var(--red)}
+    .result-item.amber .bullet{background:var(--amber-2);color:var(--amber)}
+    .result-item.green .bullet{background:var(--green-2);color:var(--green)}
+    .result-item strong{display:block;font-size:13px;margin-bottom:2px}
+    .result-item p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+
+    .progress-line{
+      height:8px;
+      background:#edf3f6;
+      border-radius:999px;
+      overflow:hidden;
+      margin-top:12px;
+    }
+    .progress-fill{
+      width:0%;
+      height:100%;
+      background:linear-gradient(90deg,var(--green),#f2ad3d,var(--red));
+      border-radius:999px;
+      transition:width 1s ease;
+    }
+
+    /* Tables */
+    table{width:100%;border-collapse:collapse}
+    th,td{
+      text-align:left;
+      padding:14px 12px;
+      border-bottom:1px solid var(--line);
+      font-size:13px;
+      vertical-align:middle;
+    }
+    th{
+      color:#6a7787;
+      font-size:12px;
+      text-transform:none;
+      font-weight:850;
+      background:#fbfdfe;
+    }
+    tr:last-child td{border-bottom:0}
+    .status-pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:6px 9px;border-radius:999px;
+      font-size:12px;font-weight:850;
+    }
+    .status-pill.safe{background:var(--green-2);color:var(--green)}
+    .status-pill.warn{background:var(--amber-2);color:var(--amber)}
+    .status-pill.danger{background:var(--red-2);color:var(--red)}
+
+    .chart{
+      height:260px;
+      padding:20px;
+      display:flex;
+      align-items:end;
+      gap:14px;
+    }
+    .bar-wrap{
+      flex:1;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:end;
+      gap:9px;
+      align-items:center;
+      min-width:0;
+    }
+    .bar{
+      width:100%;
+      max-width:46px;
+      border-radius:14px 14px 6px 6px;
+      background:linear-gradient(180deg,#31c99a,#bfeee0);
+      box-shadow:0 10px 20px rgba(21,167,121,.12);
+      transition:height .8s ease;
+    }
+    .bar-wrap:nth-child(3n) .bar{background:linear-gradient(180deg,#f0ad3d,#ffefd0)}
+    .bar-wrap:nth-child(4n) .bar{background:linear-gradient(180deg,#5f9df1,#dceaff)}
+    .bar-label{
+      font-size:11px;
+      color:#73808f;
+      white-space:nowrap;
+    }
+
+    .profile-card{
+      display:grid;
+      grid-template-columns:56px 1fr auto;
+      gap:13px;
+      align-items:center;
+      padding:15px;
+      border-radius:18px;
+      border:1px solid var(--line);
+      background:#fff;
+      margin-bottom:10px;
+    }
+    .avatar{
+      width:56px;height:56px;border-radius:18px;
+      background:linear-gradient(135deg,#edf7ff,#e7f8f1);
+      display:grid;place-items:center;
+      color:var(--green);
+      font-weight:950;
+      font-size:20px;
+    }
+    .profile-card h4{margin:0 0 5px;font-size:15px}
+    .profile-card p{margin:0;color:var(--muted);font-size:12px}
+    .profile-card .danger-count{
+      padding:7px 10px;border-radius:999px;background:var(--amber-2);color:var(--amber);font-weight:900;font-size:12px;
+    }
+
+    .empty{
+      padding:34px 24px;
+      text-align:center;
+      color:var(--muted);
+    }
+    .empty h4{margin:0 0 8px;color:#344153}
+    .empty p{margin:0;line-height:1.7}
+
+    /* Customer screen */
+    .customer-screen{
+      display:none;
+      min-height:100vh;
+      padding:24px;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(21,167,121,.14), transparent 30%),
+        radial-gradient(circle at 90% 10%, rgba(47,120,214,.14), transparent 28%),
+        linear-gradient(135deg,#f7fbfd,#edf7f3);
+      overflow:auto;
+    }
+    .ipad-shell{
+      max-width:1180px;
+      min-height:calc(100vh - 48px);
+      margin:auto;
+      background:rgba(255,255,255,.88);
+      border:1px solid rgba(229,237,243,.9);
+      border-radius:42px;
+      box-shadow:0 28px 80px rgba(18,38,63,.12);
+      padding:26px;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      backdrop-filter:blur(16px);
+    }
+    .customer-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:20px;
+      padding:8px 6px 24px;
+      border-bottom:1px solid var(--line);
+    }
+    .customer-head h1{
+      margin:0;
+      font-size:36px;
+      letter-spacing:-.04em;
+    }
+    .customer-head p{
+      margin:7px 0 0;
+      color:var(--muted);
+      font-size:16px;
+    }
+    .customer-time{
+      color:#4f5e6e;
+      background:#f4f8fb;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:12px 16px;
+      font-weight:850;
+      white-space:nowrap;
+    }
+    .customer-body{
+      display:grid;
+      grid-template-columns:1.05fr .95fr;
+      gap:24px;
+      align-items:center;
+      padding:28px 6px;
+    }
+    .customer-image{
+      min-height:540px;
+      background:#eef5f8;
+      border-radius:32px;
+      border:1px solid var(--line);
+      overflow:hidden;
+      position:relative;
+      display:grid;
+      place-items:center;
+    }
+    .customer-image img{
+      display:none;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      position:absolute;
+      inset:0;
+    }
+    .customer-image .no-image{
+      color:var(--muted);
+      font-size:18px;
+      text-align:center;
+      padding:30px;
+    }
+    .customer-result{
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+    }
+    .big-status{
+      border-radius:32px;
+      padding:28px;
+      background:#fff;
+      border:1px solid var(--line);
+      box-shadow:var(--soft-shadow);
+    }
+    .big-status .eyebrow{
+      font-size:14px;
+      font-weight:900;
+      color:var(--muted);
+      margin-bottom:10px;
+    }
+    .big-status h2{
+      font-size:64px;
+      line-height:1;
+      margin:0 0 14px;
+      letter-spacing:-.07em;
+    }
+    .big-status p{
+      margin:0;
+      font-size:19px;
+      line-height:1.7;
+      color:#4a596a;
+    }
+    .big-status.high h2{color:var(--red)}
+    .big-status.medium h2{color:var(--amber)}
+    .big-status.safe h2{color:var(--green)}
+    .customer-list{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:12px;
+    }
+    .customer-alert{
+      padding:18px;
+      border-radius:22px;
+      background:#fff;
+      border:1px solid var(--line);
+      display:flex;
+      align-items:flex-start;
+      gap:14px;
+    }
+    .customer-alert .icon{
+      width:42px;height:42px;border-radius:16px;display:grid;place-items:center;flex:0 0 auto;font-weight:950;
+    }
+    .customer-alert.red .icon{background:var(--red-2);color:var(--red)}
+    .customer-alert.amber .icon{background:var(--amber-2);color:var(--amber)}
+    .customer-alert.green .icon{background:var(--green-2);color:var(--green)}
+    .customer-alert strong{display:block;font-size:18px;margin-bottom:4px}
+    .customer-alert span{color:var(--muted);font-size:15px;line-height:1.6}
+    .customer-foot{
+      border-top:1px solid var(--line);
+      padding:18px 6px 4px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      color:#73808f;
+      font-size:14px;
+    }
+    .disclaimer{
+      max-width:720px;
+      line-height:1.6;
+    }
+
+    .toast{
+      position:fixed;
+      right:24px;
+      bottom:24px;
+      background:#17212f;
+      color:#fff;
+      padding:13px 16px;
+      border-radius:16px;
+      box-shadow:0 20px 50px rgba(0,0,0,.18);
+      transform:translateY(20px);
+      opacity:0;
+      pointer-events:none;
+      transition:.25s ease;
+      z-index:50;
+      font-weight:750;
+    }
+    .toast.show{transform:translateY(0);opacity:1}
+
+    .spinner{
+      width:18px;height:18px;border-radius:50%;
+      border:3px solid rgba(255,255,255,.45);
+      border-top-color:#fff;
+      animation:spin .8s linear infinite;
+      display:none;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (max-width:1180px){
+      .app{grid-template-columns:92px 1fr}
+      .sidebar{border-radius:24px}
+      .brand{padding:18px 14px}
+      .logo-text,.pill-row,.sidebar-footer,.nav span{display:none}
+      .logo{justify-content:center;margin-bottom:0}
+      .nav button{justify-content:center;padding:14px}
+      .workspace{grid-template-columns:1fr}
+      .grid-dashboard{grid-template-columns:1fr}
+    }
+    @media (max-width:760px){
+      body{overflow:auto}
+      .app{height:auto;min-height:100vh;display:block;padding:12px}
+      .sidebar{display:none}
+      .topbar{height:auto;align-items:flex-start;flex-direction:column;margin-bottom:14px}
+      .top-actions{width:100%;overflow-x:auto}
+      .grid-three,.grid-two,.customer-body{grid-template-columns:1fr}
+      .workspace{display:block}
+      .analysis-panel{margin-top:16px}
+      .upload-zone{min-height:320px}
+      .customer-screen{padding:10px}
+      .ipad-shell{border-radius:28px;padding:16px}
+      .customer-head{align-items:flex-start;flex-direction:column}
+      .customer-head h1{font-size:28px}
+      .customer-image{min-height:320px}
+      .big-status h2{font-size:46px}
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app" id="operatorApp">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">
+          <div class="logo-mark">盤</div>
+          <div class="logo-text">
+            <h1>盤安 SafePlate</h1>
+            <p>AI 食安檢測 SaaS</p>
+          </div>
+        </div>
+        <div class="pill-row">
+          <span class="pill">校園食堂</span>
+          <span class="pill">異物檢測</span>
+          <span class="pill">過敏提醒</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="active" data-page="dashboard" onclick="switchPage('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 13h7V4H4v9Zm0 7h7v-5H4v5Zm9 0h7v-9h-7v9Zm0-16v5h7V4h-7Z" fill="currentColor"/></svg>
+          <span>總覽儀表板</span>
+        </button>
+        <button data-page="scan" onclick="switchPage('scan')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h5v2H7v3H5V4Zm9 0h5v5h-2V6h-3V4ZM5 15h2v3h3v2H5v-5Zm12 3v-3h2v5h-5v-2h3ZM8 8h8v8H8V8Z" fill="currentColor"/></svg>
+          <span>AI 檢測工作台</span>
+        </button>
+        <button data-page="profiles" onclick="switchPage('profiles')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-8 8a8 8 0 0 1 16 0H4Z" fill="currentColor"/></svg>
+          <span>過敏原檔案</span>
+        </button>
+        <button data-page="records" onclick="switchPage('records')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10a2 2 0 0 1 2 2v16l-7-3-7 3V5a2 2 0 0 1 2-2Zm2 5h6V6H9v2Zm0 4h6v-2H9v2Zm0 4h4v-2H9v2Z" fill="currentColor"/></svg>
+          <span>檢測記錄</span>
+        </button>
+        <button data-page="settings" onclick="switchPage('settings')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="m19.4 13.5.1-1.5-.1-1.5 2-1.5-2-3.5-2.4 1a7.8 7.8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A7.8 7.8 0 0 0 7 6L4.6 5 2.6 8.5l2 1.5-.1 1.5.1 1.5-2 1.5 2 3.5 2.4-1a7.8 7.8 0 0 0 2.6 1.5L10 22h4l.4-2.5A7.8 7.8 0 0 0 17 18l2.4 1 2-3.5-2-1.5ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/></svg>
+          <span>系統設定</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="mini-card">
+          <div class="label">本日檢測狀態</div>
+          <div class="value">96 份餐盤已完成</div>
+          <div class="mini-actions">
+            <button onclick="openCustomerScreen()">投影</button>
+            <button onclick="resetDemo()">重設</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="title-block">
+          <h2 id="pageTitle">總覽儀表板</h2>
+          <p id="pageSubtitle">以一張餐盤照片，同步完成異物預警、過敏原比對與結果展示。</p>
+        </div>
+        <div class="top-actions">
+          <div class="chip"><span class="dot"></span> AI 模型在線</div>
+          <div class="chip" id="currentTime">--:--</div>
+          <button class="btn btn-ghost" onclick="switchPage('scan')">開始檢測</button>
+          <button class="btn btn-blue" onclick="openCustomerScreen()">投影到顧客螢幕</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+          <div class="grid grid-three" style="margin-bottom:18px;">
+            <div class="card metric">
+              <div class="icon">✓</div>
+              <div class="num">96</div>
+              <div class="name">今日完成檢測</div>
+            </div>
+            <div class="card metric red">
+              <div class="icon">!</div>
+              <div class="num">7</div>
+              <div class="name">高風險提醒</div>
+            </div>
+            <div class="card metric amber">
+              <div class="icon">◎</div>
+              <div class="num">18</div>
+              <div class="name">過敏原命中</div>
+            </div>
+          </div>
+
+          <div class="grid grid-dashboard">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3>全景檢測趨勢</h3>
+                  <span>最近 7 天風險分佈與檢測量</span>
+                </div>
+                <span class="status-pill safe">系統正常</span>
+              </div>
+              <div class="chart">
+                <div class="bar-wrap"><div class="bar" style="height:44%"></div><div class="bar-label">週一</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:58%"></div><div class="bar-label">週二</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:72%"></div><div class="bar-label">週三</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:64%"></div><div class="bar-label">週四</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:81%"></div><div class="bar-label">週五</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:51%"></div><div class="bar-label">週六</div></div>
+                <div class="bar-wrap"><div class="bar" style="height:36%"></div><div class="bar-label">週日</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3>最新 AI 回饋</h3>
+                  <span>顧客展示畫面將同步顯示此結果</span>
+                </div>
+              </div>
+              <div class="card-pad">
+                <div class="result-card">
+                  <div class="risk-top">
+                    <span class="risk-badge high" id="dashBadge">高風險</span>
+                    <div class="score" id="dashScore">82</div>
+                  </div>
+                  <div class="progress-line"><div class="progress-fill" id="dashProgress" style="width:82%"></div></div>
+                  <div class="result-list" id="dashResultList">
+                    <div class="result-item red">
+                      <div class="bullet">!</div>
+                      <div><strong>疑似塑膠碎片</strong><p>AI 在主菜區域偵測到透明異物，建議人工覆核。</p></div>
+                    </div>
+                    <div class="result-item amber">
+                      <div class="bullet">◎</div>
+                      <div><strong>花生過敏原命中</strong><p>與學生個人過敏檔案比對後，發出提醒。</p></div>
+                    </div>
+                  </div>
+                </div>
+                <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="switchPage('scan')">進入檢測工作台</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:18px;">
+            <div class="card-header">
+              <div>
+                <h3>最近檢測記錄</h3>
+                <span>保留完整時間、圖片處理狀態與風險等級</span>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr><th>時間</th><th>檢測場景</th><th>學生 / 顧客</th><th>AI 結果</th><th>狀態</th></tr>
+              </thead>
+              <tbody id="recordTableTop"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Scan -->
+        <div class="page" id="page-scan">
+          <div class="workspace">
+            <div class="card card-pad">
+              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()">
+                <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+                <div class="upload-placeholder" id="uploadPlaceholder">
+                  <div class="upload-icon">
+                    <svg width="38" height="38" viewBox="0 0 24 24" fill="none"><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm8 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" fill="currentColor"/></svg>
+                  </div>
+                  <h3>上傳或拍攝餐盤照片</h3>
+                  <p>支援手機、平板或電腦上傳。AI 將自動進行異物掃描、食材辨識與過敏原比對。</p>
+                </div>
+                <img id="previewImage" alt="餐盤照片預覽" />
+                <div class="scan-frame"></div>
+                <div class="bbox-layer" id="bboxLayer"></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="analyzeBtn" onclick="event.stopPropagation(); analyzePlate();">
+                  <span class="spinner" id="analyzeSpinner"></span>
+                  <span id="analyzeBtnText">提交 AI 讀取</span>
+                </button>
+                <button class="btn btn-blue" onclick="event.stopPropagation(); openCustomerScreen();">投影到顧客螢幕</button>
+                <button class="btn btn-ghost" onclick="event.stopPropagation(); loadSample();">使用示範餐盤</button>
+              </div>
+            </div>
+
+            <div class="analysis-panel">
+              <div class="card card-pad">
+                <div class="select-row">
+                  <div class="field">
+                    <label>檢測場景</label>
+                    <select id="sceneSelect">
+                      <option>校園食堂</option>
+                      <option>托管中心</option>
+                      <option>活動供餐</option>
+                      <option>醫院 / 養老院</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>顧客 / 學生</label>
+                    <select id="customerSelect"></select>
+                  </div>
+                </div>
+                <div class="field" style="margin-top:14px;">
+                  <label>本次食材 / 過敏原清單</label>
+                  <div class="allergen-tags">
+                    <label class="tag-check"><input type="checkbox" checked><span>花生</span></label>
+                    <label class="tag-check"><input type="checkbox"><span>牛奶</span></label>
+                    <label class="tag-check"><input type="checkbox" checked><span>蝦</span></label>
+                    <label class="tag-check"><input type="checkbox"><span>小麥</span></label>
+                    <label class="tag-check"><input type="checkbox"><span>堅果</span></label>
+                    <label class="tag-check"><input type="checkbox"><span>蛋</span></label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card card-pad">
+                <div class="result-card">
+                  <div class="risk-top">
+                    <span class="risk-badge high" id="riskBadge">尚未檢測</span>
+                    <div class="score" id="riskScore">--</div>
+                  </div>
+                  <div class="progress-line"><div class="progress-fill" id="riskProgress"></div></div>
+                  <div class="result-list" id="resultList">
+                    <div class="empty">
+                      <h4>等待 AI 分析</h4>
+                      <p>上傳餐盤照片後，結果會顯示在此，並可一鍵投影至第二螢幕。</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card card-pad">
+                <div class="field">
+                  <label>人工覆核備註</label>
+                  <textarea id="staffNote" placeholder="例如：已通知食堂更換餐盤，並提醒學生避免食用。"></textarea>
+                </div>
+                <button class="btn btn-ghost" style="width:100%;margin-top:12px;" onclick="saveStaffNote()">儲存備註</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Profiles -->
+        <div class="page" id="page-profiles">
+          <div class="grid grid-two">
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3>個人過敏原檔案</h3>
+                  <span>系統會把 AI 辨識結果與個人資料交叉比對</span>
+                </div>
+              </div>
+              <div class="card-pad" id="profileList"></div>
+            </div>
+
+            <div class="card card-pad">
+              <h3 style="margin:0 0 14px;">新增 / 編輯檔案</h3>
+              <div class="field">
+                <label>姓名</label>
+                <input id="profileName" placeholder="例如：梁同学" />
+              </div>
+              <div class="field" style="margin-top:12px;">
+                <label>過敏原</label>
+                <input id="profileAllergens" placeholder="例如：花生、虾、牛奶" />
+              </div>
+              <div class="field" style="margin-top:12px;">
+                <label>提醒方式</label>
+                <select id="profileSensitivity"><option value="high">高敏感度：任何疑似命中均提醒</option><option value="normal">一般提醒</option></select>
+              </div>
+              <button class="btn btn-primary" style="width:100%;margin-top:14px;" onclick="saveProfile()">儲存檔案</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Records -->
+        <div class="page" id="page-records">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>檢測記錄</h3>
+                <span>用於管理者追蹤、日報整理與食安改善</span>
+              </div>
+              <button class="btn btn-ghost" onclick="exportReport()">匯出日報</button>
+            </div>
+            <table>
+              <thead>
+                <tr><th>時間</th><th>場景</th><th>對象</th><th>異物</th><th>過敏原</th><th>狀態</th></tr>
+              </thead>
+              <tbody id="recordTableFull"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="page" id="page-settings">
+          <div class="grid grid-two">
+            <div class="card card-pad">
+              <h3 style="margin:0 0 14px;">檢測清單設定</h3>
+              <div class="field">
+                <label>異物檢測目標</label>
+                <textarea>透明塑膠片、玻璃碎片、頭髮、昆蟲、金屬碎片、包裝殘留</textarea>
+              </div>
+              <div class="field" style="margin-top:12px;">
+                <label>AI 回應模式</label>
+                <select>
+                  <option>AI 先篩查，人工再確認</option>
+                  <option>只顯示低風險提示</option>
+                  <option>完整技術分析模式</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" style="margin-top:14px;">更新清單</button>
+            </div>
+            <div class="card card-pad">
+              <h3 style="margin:0 0 14px;">第二螢幕設定</h3>
+              <div class="field">
+                <label>展示語氣</label>
+                <select>
+                  <option>顧客友好：簡潔、清楚、不恐慌</option>
+                  <option>校園模式：提醒學生向職員確認</option>
+                  <option>管理模式：顯示較多細節</option>
+                </select>
+              </div>
+              <div class="field" style="margin-top:12px;">
+                <label>底部提醒文字</label>
+                <textarea>本結果由 AI 輔助判斷，不能替代人工檢查。如有疑問，請向現場職員確認。</textarea>
+              </div>
+              <button class="btn btn-blue" style="margin-top:14px;" onclick="openCustomerScreen()">開啟顧客展示畫面</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Customer / iPad display -->
+  <div class="customer-screen" id="customerScreen">
+    <div class="ipad-shell">
+      <div class="customer-head">
+        <div>
+          <h1>餐點安全檢測結果</h1>
+          <p>SafePlate AI 已完成本次餐盤初步檢查</p>
+        </div>
+        <div class="customer-time" id="customerTime">等待同步</div>
+      </div>
+
+      <div class="customer-body">
+        <div class="customer-image">
+          <div class="no-image" id="customerNoImage">等待工作人員提交餐盤照片</div>
+          <img id="customerImage" alt="顧客餐盤照片" />
+        </div>
+
+        <div class="customer-result">
+          <div class="big-status high" id="customerStatusCard">
+            <div class="eyebrow">AI 檢測判斷</div>
+            <h2 id="customerStatus">等待中</h2>
+            <p id="customerSummary">檢測結果會在工作人員提交後自動顯示。</p>
+          </div>
+
+          <div class="customer-list" id="customerAlertList">
+            <div class="customer-alert green">
+              <div class="icon">✓</div>
+              <div><strong>準備接收結果</strong><span>請稍候，系統正在等待檢測資料。</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="customer-foot">
+        <div class="disclaimer">本結果由 AI 輔助判斷，不能替代人工檢查。如有疑問，請向現場職員確認。</div>
+        <strong>盤安 SafePlate</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">已更新</div>
+
+<script>
+const state = {
+  image: "",
+  analyzed: false,
+  risk: "high",
+  score: 82,
+  scene: "校園食堂",
+  person: "梁同學｜花生、蝦",
+  summary: "偵測到疑似塑膠碎片，並命中花生過敏原。建議暫停食用並由工作人員覆核。",
+  alerts: [
+    {type:"red", title:"疑似塑膠碎片", desc:"AI 在主菜區域偵測到透明異物，建議立即人工檢查。"},
+    {type:"amber", title:"花生過敏原命中", desc:"與個人過敏檔案比對後發現風險，請避免食用。"},
+    {type:"green", title:"蔬菜及主食區未見明顯異常", desc:"目前未在飯菜區域發現高風險異物。"}
+  ],
+  profiles: [
+    {id:"liang", name:"梁同学", allergens:["花生","虾"], sensitivity:"high"},
+    {id:"chen", name:"陈同学", allergens:["牛奶","坚果"], sensitivity:"normal"},
+    {id:"huang", name:"黄先生", allergens:[], sensitivity:"normal"}
+  ],
+  detections: [],
+  records: [
+    ["12:04","校園食堂","梁同學","疑似塑膠碎片","花生","danger"],
+    ["11:58","校園食堂","陳同學","未見異常","牛奶提醒","warn"],
+    ["11:45","活動供餐","訪客模式","未見異常","無","safe"],
+    ["11:33","托管中心","黃先生","頭髮疑似物","無","danger"]
+  ]
+};
+
+const pageInfo = {
+  dashboard:["總覽儀表板","以一張餐盤照片，同步完成異物預警、過敏原比對與結果展示。"],
+  scan:["AI 檢測工作台","上傳餐盤照片，提交 AI 讀取，並把結果投影到 iPad 或第二螢幕。"],
+  profiles:["過敏原檔案","管理學生或顧客的個人過敏資料，支援精準提醒。"],
+  records:["檢測記錄","追蹤每次掃描結果，方便管理者作日常食安監測。"],
+  settings:["系統設定","設定檢測清單、提醒文字與顧客展示模式。"]
+};
+
+function switchPage(page){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.getElementById("page-"+page).classList.add("active");
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active", b.dataset.page===page));
+  document.getElementById("pageTitle").textContent = pageInfo[page][0];
+  document.getElementById("pageSubtitle").textContent = pageInfo[page][1];
+}
+
+function updateTime(){
+  const now = new Date();
+  const time = now.toLocaleTimeString("zh-Hant", {hour:"2-digit", minute:"2-digit"});
+  const date = now.toLocaleDateString("zh-Hant", {month:"short", day:"numeric"});
+  document.getElementById("currentTime").textContent = date + " " + time;
+  const ct = document.getElementById("customerTime");
+  if(ct) ct.textContent = "更新時間 " + time;
+}
+setInterval(updateTime,1000); updateTime();
+
+document.getElementById("photoInput").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    state.image = reader.result;
+    state.analyzed = false;
+    setPreview(state.image);
+    syncState();
+    showToast("餐盤照片已上傳");
+  };
+  reader.readAsDataURL(file);
+});
+
+function setPreview(src){
+  const zone = document.getElementById("uploadZone");
+  const img = document.getElementById("previewImage");
+  document.getElementById("uploadPlaceholder").style.display = "none";
+  img.src = src;
+  img.style.display = "block";
+  zone.classList.add("has-image");
+  zone.classList.remove("analyzed");
+}
+
+async function analyzePlate(){
+  if(!state.image){
+    loadSample();
+  }
+  const btn = document.getElementById("analyzeBtn");
+  const spinner = document.getElementById("analyzeSpinner");
+  const text = document.getElementById("analyzeBtnText");
+  btn.disabled = true;
+  spinner.style.display = "inline-block";
+  text.textContent = "AI 分析中...";
+
+  try{
+    const profile = getSelectedProfile();
+    const response = await fetch("/api/analyze", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({image:state.image, allergens:profile ? profile.allergens : []})
+    });
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error || "AI 分析失败");
+    state.analyzed = true;
+    state.risk = result.risk;
+    state.score = Math.round(result.score || 0);
+    state.summary = result.summary || "分析完成，请人工复核。";
+    state.detections = result.detections || [];
+    state.alerts = state.detections.length ? state.detections.map(d=>({
+      type:d.category === "foreign_object" ? "red" : "amber",
+      title:d.label,
+      desc:`${d.description}（置信度 ${Math.round((d.confidence || 0)*100)}%）`
+    })) : [{type:"green",title:"未发现明显风险",desc:"AI 未发现明显过敏原或异物，仍建议人工确认。"}];
+    state.scene = document.getElementById("sceneSelect").value;
+    state.person = document.getElementById("customerSelect").selectedOptions[0]?.textContent || "访客模式";
+    document.getElementById("uploadZone").classList.add("analyzed");
+    renderBoxes();
+    renderResults();
+    renderDashboardResult();
+    addRecord();
+    syncState();
+    showToast("AI 檢測完成，結果已同步");
+  }catch(error){
+    showToast(error.message || "AI 分析失败，请重试");
+  }finally{
+    btn.disabled = false;
+    spinner.style.display = "none";
+    text.textContent = state.analyzed ? "重新提交 AI 讀取" : "提交 AI 讀取";
+  }
+}
+
+function escapeHtml(value){
+  return String(value).replace(/[&<>'"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+}
+
+function renderBoxes(){
+  const layer = document.getElementById("bboxLayer");
+  layer.innerHTML = (state.detections || []).filter(d=>d.box && d.box.width > 0 && d.box.height > 0).map(d=>{
+    const b=d.box, kind=d.category === "foreign_object" ? "red" : "amber";
+    return `<div class="bbox dynamic ${kind}" style="left:${b.x}%;top:${b.y}%;width:${b.width}%;height:${b.height}%"><span class="tag">${escapeHtml(d.label)}</span></div>`;
+  }).join("");
+}
+
+function renderResults(){
+  const badge = document.getElementById("riskBadge");
+  const score = document.getElementById("riskScore");
+  const progress = document.getElementById("riskProgress");
+  const list = document.getElementById("resultList");
+
+  badge.className = "risk-badge " + (state.risk === "low" ? "safe" : state.risk === "medium" ? "medium" : "high");
+  badge.textContent = state.risk === "low" ? "低風險" : state.risk === "medium" ? "中風險" : "高風險";
+  score.textContent = state.score;
+  progress.style.width = state.score + "%";
+  list.innerHTML = state.alerts.map(a=>`
+    <div class="result-item ${a.type}">
+      <div class="bullet">${a.type==="red"?"!":a.type==="amber"?"◎":"✓"}</div>
+      <div><strong>${a.title}</strong><p>${a.desc}</p></div>
+    </div>
+  `).join("");
+}
+
+function renderDashboardResult(){
+  document.getElementById("dashBadge").className = "risk-badge " + (state.risk === "low" ? "safe" : state.risk === "medium" ? "medium" : "high");
+  document.getElementById("dashBadge").textContent = state.risk === "low" ? "低風險" : state.risk === "medium" ? "中風險" : "高風險";
+  document.getElementById("dashScore").textContent = state.score;
+  document.getElementById("dashProgress").style.width = state.score + "%";
+  document.getElementById("dashResultList").innerHTML = state.alerts.slice(0,2).map(a=>`
+    <div class="result-item ${a.type}">
+      <div class="bullet">${a.type==="red"?"!":a.type==="amber"?"◎":"✓"}</div>
+      <div><strong>${a.title}</strong><p>${a.desc}</p></div>
+    </div>
+  `).join("");
+}
+
+function addRecord(){
+  const now = new Date().toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"});
+  state.records.unshift([now,state.scene,state.person.split("｜")[0],"疑似塑膠碎片","花生","danger"]);
+  state.records = state.records.slice(0,8);
+  renderTables();
+}
+
+function renderTables(){
+  const statusMap = {
+    safe:["safe","正常"],
+    warn:["warn","需注意"],
+    danger:["danger","需覆核"]
+  };
+  const rows = state.records.map(r=>{
+    const s = statusMap[r[5]];
+    return `<tr>
+      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td>
+      <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
+    </tr>`;
+  }).join("");
+  const topRows = state.records.slice(0,4).map(r=>{
+    const s = statusMap[r[5]];
+    return `<tr>
+      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]} / ${r[4]}</td>
+      <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
+    </tr>`;
+  }).join("");
+  document.getElementById("recordTableFull").innerHTML = rows;
+  document.getElementById("recordTableTop").innerHTML = topRows;
+}
+
+let editingProfileId = null;
+
+function renderProfiles(){
+  const list = document.getElementById("profileList");
+  const select = document.getElementById("customerSelect");
+  list.innerHTML = state.profiles.map(p=>`<div class="profile-card">
+    <div class="avatar">${escapeHtml(p.name.slice(0,1))}</div>
+    <div style="flex:1"><h4>${escapeHtml(p.name)}</h4><p>${p.allergens.length ? escapeHtml(p.allergens.join("、")) : "暂无登记过敏原"}｜${p.sensitivity === "high" ? "高敏感度" : "一般"}提醒</p></div>
+    <button class="btn btn-ghost" style="padding:8px" onclick="editProfile('${p.id}')">编辑</button>
+    <button class="btn btn-ghost" style="padding:8px;color:#d94b4b" onclick="deleteProfile('${p.id}')">删除</button>
+  </div>`).join("") || `<div class="empty"><h4>尚无学生档案</h4><p>请在右侧新增学生及过敏原。</p></div>`;
+  const previous = select.value;
+  select.innerHTML = state.profiles.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}｜${p.allergens.length ? escapeHtml(p.allergens.join("、")) : "无登记过敏"}</option>`).join("") + `<option value="guest">访客模式</option>`;
+  if([...select.options].some(o=>o.value===previous)) select.value=previous;
+}
+
+function getSelectedProfile(){
+  return state.profiles.find(p=>p.id===document.getElementById("customerSelect").value) || null;
+}
+
+function saveProfile(){
+  const name=document.getElementById("profileName").value.trim();
+  const allergens=document.getElementById("profileAllergens").value.split(/[、,，]/).map(v=>v.trim()).filter(Boolean);
+  const sensitivity=document.getElementById("profileSensitivity").value;
+  if(!name){showToast("请填写姓名");return;}
+  if(editingProfileId){
+    const profile=state.profiles.find(p=>p.id===editingProfileId);
+    if(profile) Object.assign(profile,{name,allergens,sensitivity});
+  }else{
+    state.profiles.push({id:`p_${Date.now()}`,name,allergens,sensitivity});
+  }
+  editingProfileId=null;
+  document.getElementById("profileName").value="";
+  document.getElementById("profileAllergens").value="";
+  renderProfiles(); syncState(); showToast("过敏原档案已保存");
+}
+
+function editProfile(id){
+  const p=state.profiles.find(item=>item.id===id); if(!p)return;
+  editingProfileId=id;
+  document.getElementById("profileName").value=p.name;
+  document.getElementById("profileAllergens").value=p.allergens.join("、");
+  document.getElementById("profileSensitivity").value=p.sensitivity;
+}
+
+function deleteProfile(id){
+  state.profiles=state.profiles.filter(p=>p.id!==id);
+  if(editingProfileId===id) editingProfileId=null;
+  renderProfiles(); syncState(); showToast("档案已删除");
+}
+
+function syncState(){
+  localStorage.setItem("safeplate_saas_state", JSON.stringify(state));
+  updateCustomerScreen();
+}
+
+function getSyncedState(){
+  try{
+    return JSON.parse(localStorage.getItem("safeplate_saas_state")) || state;
+  }catch(e){return state;}
+}
+
+function openCustomerScreen(){
+  syncState();
+  const url = location.href.split("#")[0] + "#customer";
+  const win = window.open(url, "SafePlateCustomerDisplay", "width=1180,height=820");
+  if(!win){
+    showToast("請允許瀏覽器彈出視窗");
+  }else{
+    showToast("顧客展示畫面已開啟");
+  }
+}
+
+function updateCustomerScreen(){
+  const data = getSyncedState();
+  const image = document.getElementById("customerImage");
+  const noImage = document.getElementById("customerNoImage");
+  if(data.image){
+    image.src = data.image;
+    image.style.display = "block";
+    noImage.style.display = "none";
+  }else{
+    image.style.display = "none";
+    noImage.style.display = "block";
+  }
+
+  const statusCard = document.getElementById("customerStatusCard");
+  const status = document.getElementById("customerStatus");
+  const summary = document.getElementById("customerSummary");
+  const list = document.getElementById("customerAlertList");
+
+  if(!data.analyzed){
+    statusCard.className = "big-status medium";
+    status.textContent = "等待中";
+    summary.textContent = "工作人員提交 AI 讀取後，檢測結果會自動同步至此畫面。";
+    list.innerHTML = `<div class="customer-alert green"><div class="icon">✓</div><div><strong>準備接收結果</strong><span>請稍候，系統正在等待檢測資料。</span></div></div>`;
+    return;
+  }
+
+  statusCard.className = "big-status " + (data.risk === "low" ? "safe" : data.risk === "medium" ? "medium" : "high");
+  status.textContent = data.risk === "low" ? "低风险" : data.risk === "medium" ? "需留意" : "需检查";
+  summary.textContent = data.summary;
+  list.innerHTML = data.alerts.map(a=>`
+    <div class="customer-alert ${a.type}">
+      <div class="icon">${a.type==="red"?"!":a.type==="amber"?"◎":"✓"}</div>
+      <div><strong>${a.title}</strong><span>${a.desc}</span></div>
+    </div>
+  `).join("");
+}
+
+function loadSample(){
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1"><stop stop-color="#f7fbfd"/><stop offset="1" stop-color="#e9f4f0"/></linearGradient>
+        <filter id="s"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#123" flood-opacity=".16"/></filter>
+      </defs>
+      <rect width="1200" height="820" fill="url(#bg)"/>
+      <rect x="140" y="90" width="920" height="640" rx="58" fill="#e9eef1" filter="url(#s)"/>
+      <rect x="190" y="140" width="820" height="540" rx="36" fill="#fdfefe"/>
+      <circle cx="395" cy="405" r="150" fill="#ffffff"/>
+      <g fill="#f7f7f7"><circle cx="345" cy="360" r="20"/><circle cx="405" cy="392" r="24"/><circle cx="450" cy="335" r="18"/><circle cx="370" cy="470" r="22"/><circle cx="480" cy="455" r="20"/></g>
+      <path d="M560 175h390v450H560z" fill="#f6faf8"/>
+      <g>
+        <circle cx="650" cy="260" r="42" fill="#63bf7c"/><circle cx="725" cy="305" r="38" fill="#78d694"/><circle cx="815" cy="260" r="44" fill="#65b87a"/>
+        <circle cx="870" cy="360" r="38" fill="#f0a040"/><circle cx="660" cy="430" r="52" fill="#6fc17f"/><circle cx="785" cy="465" r="44" fill="#58a96a"/>
+        <path d="M585 535c90-40 215-30 350 18 12 4 19 17 15 29-34 95-288 75-369 0-15-14-12-39 4-47z" fill="#9d612e"/>
+      </g>
+      <path d="M825 455l52 16-36 39z" fill="#d9e0e5" stroke="#aebbc5" stroke-width="4"/>
+      <circle cx="385" cy="385" r="10" fill="#e3a14e"/>
+      <circle cx="420" cy="420" r="8" fill="#e3a14e"/>
+      <text x="600" y="735" font-family="Arial" font-size="30" fill="#5a6878" font-weight="700">SafePlate Demo Meal Tray</text>
+    </svg>`;
+  state.image = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+  state.analyzed = false;
+  setPreview(state.image);
+  syncState();
+  showToast("已載入示範餐盤");
+}
+
+function resetDemo(){
+  localStorage.removeItem("safeplate_saas_state");
+  location.reload();
+}
+
+function saveStaffNote(){
+  showToast("備註已儲存");
+}
+
+function exportReport(){
+  showToast("已生成今日檢測日報 Demo");
+}
+
+function showToast(msg){
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(()=>toast.classList.remove("show"),2200);
+}
+
+window.addEventListener("storage", updateCustomerScreen);
+
+function initMode(){
+  renderTables();
+  renderDashboardResult();
+  const synced = getSyncedState();
+  if(synced.image){
+    Object.assign(state, synced);
+    setPreview(state.image);
+    if(state.analyzed){
+      document.getElementById("uploadZone").classList.add("analyzed");
+      renderBoxes();
+      renderResults();
+      renderDashboardResult();
+    }
+  }
+  if(location.hash === "#customer"){
+    document.getElementById("operatorApp").style.display = "none";
+    document.getElementById("customerScreen").style.display = "block";
+    document.body.style.overflow = "auto";
+    updateCustomerScreen();
+    setInterval(updateCustomerScreen, 700);
+  }
+  renderProfiles();
+}
+
+initMode();
+</script>
+</body>
+</html>
