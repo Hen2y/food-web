@@ -855,7 +855,7 @@
       <div class="sidebar-footer">
         <div class="mini-card">
           <div class="label">本日檢測狀態</div>
-          <div class="value">96 份餐盤已完成</div>
+          <div class="value" id="sidebarTodayStatus">0 份餐盤已完成</div>
           <div class="mini-actions">
             <button onclick="openCustomerScreen()">投影</button>
             <button onclick="resetDemo()">重設</button>
@@ -884,17 +884,17 @@
           <div class="grid grid-three" style="margin-bottom:18px;">
             <div class="card metric">
               <div class="icon">✓</div>
-              <div class="num">96</div>
+              <div class="num" id="metricTodayTotal">0</div>
               <div class="name">今日完成檢測</div>
             </div>
             <div class="card metric red">
               <div class="icon">!</div>
-              <div class="num">7</div>
+              <div class="num" id="metricHighRisk">0</div>
               <div class="name">高風險提醒</div>
             </div>
             <div class="card metric amber">
               <div class="icon">◎</div>
-              <div class="num">18</div>
+              <div class="num" id="metricAllergenHits">0</div>
               <div class="name">過敏原命中</div>
             </div>
           </div>
@@ -903,19 +903,12 @@
             <div class="card">
               <div class="card-header">
                 <div>
-                  <h3>全景檢測趨勢</h3>
-                  <span>最近 7 天風險分佈與檢測量</span>
+                  <h3>真實檢測趨勢</h3>
+                  <span>根據本機實際 AI 檢測記錄自動統計</span>
                 </div>
                 <span class="status-pill safe">系統正常</span>
               </div>
-              <div class="chart">
-                <div class="bar-wrap"><div class="bar" style="height:44%"></div><div class="bar-label">週一</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:58%"></div><div class="bar-label">週二</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:72%"></div><div class="bar-label">週三</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:64%"></div><div class="bar-label">週四</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:81%"></div><div class="bar-label">週五</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:51%"></div><div class="bar-label">週六</div></div>
-                <div class="bar-wrap"><div class="bar" style="height:36%"></div><div class="bar-label">週日</div></div>
+              <div class="chart" id="dashboardChart">
               </div>
             </div>
 
@@ -929,18 +922,14 @@
               <div class="card-pad">
                 <div class="result-card">
                   <div class="risk-top">
-                    <span class="risk-badge high" id="dashBadge">高風險</span>
-                    <div class="score" id="dashScore">82</div>
+                    <span class="risk-badge medium" id="dashBadge">尚未檢測</span>
+                    <div class="score" id="dashScore">--</div>
                   </div>
-                  <div class="progress-line"><div class="progress-fill" id="dashProgress" style="width:82%"></div></div>
+                  <div class="progress-line"><div class="progress-fill" id="dashProgress" style="width:0%"></div></div>
                   <div class="result-list" id="dashResultList">
-                    <div class="result-item red">
-                      <div class="bullet">!</div>
-                      <div><strong>疑似塑膠碎片</strong><p>AI 在主菜區域偵測到透明異物，建議人工覆核。</p></div>
-                    </div>
-                    <div class="result-item amber">
-                      <div class="bullet">◎</div>
-                      <div><strong>花生過敏原命中</strong><p>與學生個人過敏檔案比對後，發出提醒。</p></div>
+                    <div class="result-item green">
+                      <div class="bullet">✓</div>
+                      <div><strong>暂无真实检测结果</strong><p>上传餐盘照片并完成 AI 检测后，这里会显示最新结果。</p></div>
                     </div>
                   </div>
                 </div>
@@ -1176,29 +1165,21 @@
 
 <script>
 const state = {
+  dataVersion: 3,
   image: "",
   analyzed: false,
-  risk: "high",
-  score: 82,
-  person: "梁同學｜花生、蝦",
-  summary: "偵測到疑似塑膠碎片，並命中花生過敏原。建議暫停食用並由工作人員覆核。",
-  alerts: [
-    {type:"red", title:"疑似塑膠碎片", desc:"AI 在主菜區域偵測到透明異物，建議立即人工檢查。"},
-    {type:"amber", title:"花生過敏原命中", desc:"與個人過敏檔案比對後發現風險，請避免食用。"},
-    {type:"green", title:"蔬菜及主食區未見明顯異常", desc:"目前未在飯菜區域發現高風險異物。"}
-  ],
+  risk: "low",
+  score: 0,
+  person: "访客模式",
+  summary: "尚未提交 AI 检测。",
+  alerts: [],
   profiles: [
     {id:"liang", name:"梁同学", allergens:["花生","虾"], sensitivity:"high"},
     {id:"chen", name:"陈同学", allergens:["牛奶","坚果"], sensitivity:"normal"},
     {id:"huang", name:"黄先生", allergens:[], sensitivity:"normal"}
   ],
   detections: [],
-  records: [
-    ["12:04","梁同學","疑似塑膠碎片","花生","danger"],
-    ["11:58","陳同學","未見異常","牛奶提醒","warn"],
-    ["11:45","訪客模式","未見異常","無","safe"],
-    ["11:33","黃先生","頭髮疑似物","無","danger"]
-  ]
+  records: []
 };
 
 const pageInfo = {
@@ -1353,6 +1334,18 @@ function renderResults(){
 }
 
 function renderDashboardResult(){
+  if(!state.analyzed){
+    document.getElementById("dashBadge").className = "risk-badge medium";
+    document.getElementById("dashBadge").textContent = "尚未檢測";
+    document.getElementById("dashScore").textContent = "--";
+    document.getElementById("dashProgress").style.width = "0%";
+    document.getElementById("dashResultList").innerHTML = `
+      <div class="result-item green">
+        <div class="bullet">✓</div>
+        <div><strong>暂无真实检测结果</strong><p>上传餐盘照片并完成 AI 检测后，这里会显示最新结果。</p></div>
+      </div>`;
+    return;
+  }
   document.getElementById("dashBadge").className = "risk-badge " + (state.risk === "low" ? "safe" : state.risk === "medium" ? "medium" : "high");
   document.getElementById("dashBadge").textContent = state.risk === "low" ? "低風險" : state.risk === "medium" ? "中風險" : "高風險";
   document.getElementById("dashScore").textContent = state.score;
@@ -1366,19 +1359,90 @@ function renderDashboardResult(){
 }
 
 function addRecord(){
-  const now = new Date().toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"});
+  const nowDate = new Date();
   const primaryAlert = state.alerts[0] || {title:"未見異常"};
   const allergenAlert = state.alerts.find(a=>a.type === "amber");
   const status = state.risk === "low" ? "safe" : state.risk === "medium" ? "warn" : "danger";
-  state.records.unshift([
-    now,
-    state.person.split("｜")[0],
-    primaryAlert.title || "分析完成",
-    allergenAlert?.title || (state.risk === "low" ? "無" : "需人工覆核"),
-    status
-  ]);
-  state.records = state.records.slice(0,8);
+  state.records.unshift({
+    dateISO: formatDateKey(nowDate),
+    time: nowDate.toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"}),
+    person: state.person.split("｜")[0],
+    result: primaryAlert.title || "分析完成",
+    notice: allergenAlert?.title || (state.risk === "low" ? "無" : "需人工覆核"),
+    status,
+    risk: state.risk,
+    score: state.score,
+    allergenHit: Boolean(allergenAlert),
+    createdAt: nowDate.toISOString()
+  });
+  state.records = state.records.slice(0,50);
+  renderDashboardStats();
   renderTables();
+}
+
+function formatDateKey(date){
+  const y = date.getFullYear();
+  const m = String(date.getMonth()+1).padStart(2,"0");
+  const d = String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeRecord(r){
+  if(r && !Array.isArray(r)){
+    return {
+      dateISO: r.dateISO || formatDateKey(new Date(r.createdAt || Date.now())),
+      time: r.time || "",
+      person: r.person || "访客模式",
+      result: r.result || "分析完成",
+      notice: r.notice || "無",
+      status: r.status || "warn",
+      allergenHit: Boolean(r.allergenHit)
+    };
+  }
+  if(Array.isArray(r) && r.length >= 6){
+    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[2], result:r[3], notice:r[4], status:r[5], allergenHit:Boolean(r[4] && r[4] !== "無")};
+  }
+  if(Array.isArray(r)){
+    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[1], result:r[2], notice:r[3], status:r[4], allergenHit:Boolean(r[3] && r[3] !== "無")};
+  }
+  return null;
+}
+
+function getRealRecords(){
+  return (state.records || []).map(normalizeRecord).filter(Boolean);
+}
+
+function getLastSevenDays(){
+  const today = new Date();
+  return Array.from({length:7}, (_, index)=>{
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    return {key:formatDateKey(date), label:date.toLocaleDateString("zh-Hant",{weekday:"short"})};
+  });
+}
+
+function renderDashboardStats(){
+  const records = getRealRecords();
+  const todayKey = formatDateKey(new Date());
+  const todayRecords = records.filter(r=>r.dateISO === todayKey);
+  document.getElementById("metricTodayTotal").textContent = todayRecords.length;
+  document.getElementById("metricHighRisk").textContent = todayRecords.filter(r=>r.status === "danger").length;
+  document.getElementById("metricAllergenHits").textContent = todayRecords.filter(r=>r.allergenHit).length;
+  document.getElementById("sidebarTodayStatus").textContent = `${todayRecords.length} 份餐盤已完成`;
+
+  const days = getLastSevenDays().map(day=>{
+    const dayRecords = records.filter(r=>r.dateISO === day.key);
+    return {...day, count:dayRecords.length, high:dayRecords.filter(r=>r.status === "danger").length};
+  });
+  const maxCount = Math.max(1, ...days.map(day=>day.count));
+  document.getElementById("dashboardChart").innerHTML = days.map(day=>{
+    const height = day.count ? Math.max(12, Math.round((day.count / maxCount) * 100)) : 3;
+    const title = `${day.label}：${day.count} 次检测，${day.high} 次高风险`;
+    return `<div class="bar-wrap" title="${escapeHtml(title)}">
+      <div class="bar" style="height:${height}%"></div>
+      <div class="bar-label">${escapeHtml(day.label)}<br>${day.count}</div>
+    </div>`;
+  }).join("");
 }
 
 function renderTables(){
@@ -1387,26 +1451,21 @@ function renderTables(){
     warn:["warn","需注意"],
     danger:["danger","需覆核"]
   };
-  const normalizeRecord = (r) => {
-    if(r.length >= 6){
-      return [r[0], r[2], r[3], r[4], r[5]];
-    }
-    return r;
-  };
-  const rows = state.records.map(normalizeRecord).map(r=>{
-    const s = statusMap[r[4]] || statusMap.warn;
+  const records = getRealRecords();
+  const rows = records.map(r=>{
+    const s = statusMap[r.status] || statusMap.warn;
     return `<tr>
-      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td>
+      <td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)}</td><td>${escapeHtml(r.notice)}</td>
       <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
     </tr>`;
-  }).join("");
-  const topRows = state.records.slice(0,4).map(normalizeRecord).map(r=>{
-    const s = statusMap[r[4]] || statusMap.warn;
+  }).join("") || `<tr><td colspan="5">暂无真实检测记录</td></tr>`;
+  const topRows = records.slice(0,4).map(r=>{
+    const s = statusMap[r.status] || statusMap.warn;
     return `<tr>
-      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]} / ${r[3]}</td>
+      <td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)} / ${escapeHtml(r.notice)}</td>
       <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
     </tr>`;
-  }).join("");
+  }).join("") || `<tr><td colspan="4">暂无真实检测记录</td></tr>`;
   document.getElementById("recordTableFull").innerHTML = rows;
   document.getElementById("recordTableTop").innerHTML = topRows;
 }
@@ -1469,7 +1528,24 @@ function syncState(){
 
 function getSyncedState(){
   try{
-    return JSON.parse(localStorage.getItem("safeplate_saas_state")) || state;
+    const saved = JSON.parse(localStorage.getItem("safeplate_saas_state"));
+    if(!saved) return state;
+    if((saved.dataVersion || 0) < state.dataVersion){
+      return {
+        ...state,
+        profiles: Array.isArray(saved.profiles) ? saved.profiles : state.profiles,
+        image: "",
+        analyzed: false,
+        risk: "low",
+        score: 0,
+        person: "访客模式",
+        summary: "尚未提交 AI 检测。",
+        alerts: [],
+        detections: [],
+        records: []
+      };
+    }
+    return saved;
   }catch(e){return state;}
 }
 
@@ -1561,7 +1637,7 @@ function saveStaffNote(){
 }
 
 function exportReport(){
-  showToast("已生成今日檢測日報 Demo");
+  showToast("日報匯出功能尚未接入真實文件生成");
 }
 
 function showToast(msg){
@@ -1574,19 +1650,19 @@ function showToast(msg){
 window.addEventListener("storage", updateCustomerScreen);
 
 function initMode(){
-  renderTables();
-  renderDashboardResult();
   const synced = getSyncedState();
-  if(synced.image){
-    Object.assign(state, synced);
+  Object.assign(state, synced, {dataVersion: 3});
+  if(state.image){
     setPreview(state.image);
     if(state.analyzed){
       document.getElementById("uploadZone").classList.add("analyzed");
       renderBoxes();
       renderResults();
-      renderDashboardResult();
     }
   }
+  renderDashboardStats();
+  renderTables();
+  renderDashboardResult();
   if(location.hash === "#customer"){
     document.getElementById("operatorApp").style.display = "none";
     document.getElementById("customerScreen").style.display = "block";
