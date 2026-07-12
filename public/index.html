@@ -1291,7 +1291,7 @@ async function analyzePlate(){
     renderBoxes();
     renderResults();
     renderDashboardResult();
-    addRecord();
+    await addRecord();
     syncState();
     showToast("AI 檢測完成，結果已同步");
   }catch(error){
@@ -1358,12 +1358,12 @@ function renderDashboardResult(){
   `).join("");
 }
 
-function addRecord(){
+async function addRecord(){
   const nowDate = new Date();
   const primaryAlert = state.alerts[0] || {title:"未見異常"};
   const allergenAlert = state.alerts.find(a=>a.type === "amber");
   const status = state.risk === "low" ? "safe" : state.risk === "medium" ? "warn" : "danger";
-  state.records.unshift({
+  const record = {
     dateISO: formatDateKey(nowDate),
     time: nowDate.toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"}),
     person: state.person.split("｜")[0],
@@ -1373,11 +1373,17 @@ function addRecord(){
     risk: state.risk,
     score: state.score,
     allergenHit: Boolean(allergenAlert),
+    summary: state.summary,
     createdAt: nowDate.toISOString()
-  });
+  };
+  state.records.unshift(record);
   state.records = state.records.slice(0,50);
   renderDashboardStats();
   renderTables();
+  const saved = await saveRecordToDatabase(record);
+  if(saved){
+    await loadDatabaseRecords({silent:true});
+  }
 }
 
 function formatDateKey(date){
@@ -1410,6 +1416,39 @@ function normalizeRecord(r){
 
 function getRealRecords(){
   return (state.records || []).map(normalizeRecord).filter(Boolean);
+}
+
+async function loadDatabaseRecords(options = {}){
+  try{
+    const response = await fetch("/api/records", {cache:"no-store"});
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || "读取数据库记录失败");
+    if(data.configured && Array.isArray(data.records)){
+      state.records = data.records;
+      renderDashboardStats();
+      renderTables();
+      return true;
+    }
+  }catch(error){
+    if(!options.silent) showToast(error.message || "数据库读取失败，已使用本地记录");
+  }
+  return false;
+}
+
+async function saveRecordToDatabase(record){
+  try{
+    const response = await fetch("/api/records", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({record})
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || "保存数据库记录失败");
+    return Boolean(data.configured && data.saved);
+  }catch(error){
+    showToast(error.message || "数据库保存失败，已保存在本机");
+    return false;
+  }
 }
 
 function getLastSevenDays(){
@@ -1649,7 +1688,7 @@ function showToast(msg){
 
 window.addEventListener("storage", updateCustomerScreen);
 
-function initMode(){
+async function initMode(){
   const synced = getSyncedState();
   Object.assign(state, synced, {dataVersion: 3});
   if(state.image){
@@ -1663,6 +1702,7 @@ function initMode(){
   renderDashboardStats();
   renderTables();
   renderDashboardResult();
+  await loadDatabaseRecords({silent:true});
   if(location.hash === "#customer"){
     document.getElementById("operatorApp").style.display = "none";
     document.getElementById("customerScreen").style.display = "block";

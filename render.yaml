@@ -12,3 +12,7 @@ services:
         value: https://api.moonshot.cn/v1
       - key: MOONSHOT_MODEL
         value: kimi-k2.6
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

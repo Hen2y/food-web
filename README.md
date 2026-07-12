@@ -20,7 +20,23 @@ npm run dev
 
 总览仪表板不再使用固定演示数字。今日检测数、高风险提醒、过敏原命中和最近 7 天趋势都会根据实际完成的 AI 检测记录自动变化。
 
-目前这些记录保存在浏览器本地 `localStorage` 中，因此它们是真实记录，但只属于当前浏览器。如果要让所有手机、电脑和不同用户共享同一份全站统计，需要再接入数据库，例如 Render PostgreSQL、Supabase 或 Firebase。
+项目已接入 Supabase 数据库支持：
+
+- 如果配置了 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`，检测记录会保存到 Supabase，所有用户共用同一份仪表板数据。
+- 如果没有配置 Supabase，网站会自动退回浏览器本地 `localStorage`，方便本地演示，不会导致页面报错。
+
+### Supabase 建表
+
+进入 Supabase 项目 `food-web`，打开 **SQL Editor**，复制并运行仓库里的 `supabase-schema.sql`。
+
+### Supabase 环境变量
+
+在 Supabase 左侧进入 **Project Settings > API**，复制：
+
+- `Project URL` → 填到 Render 的 `SUPABASE_URL`
+- `service_role secret` → 填到 Render 的 `SUPABASE_SERVICE_ROLE_KEY`
+
+注意：`SUPABASE_SERVICE_ROLE_KEY` 是高权限密钥，只能放在 Render Environment 里，不能写进前端代码，也不要提交到 GitHub。
 
 ## 自动过敏原扩展词库
 
@@ -48,6 +64,8 @@ npm run dev
 首次创建时，Render 会要求填写：
 
 - `MOONSHOT_API_KEY`：你的 Kimi API key（机密）
+- `SUPABASE_URL`：Supabase Project URL
+- `SUPABASE_SERVICE_ROLE_KEY`：Supabase service_role secret（机密）
 
 以下两项已写入 `render.yaml`，通常无需手动填写：
 
