@@ -958,7 +958,7 @@
             </div>
             <table>
               <thead>
-                <tr><th>時間</th><th>檢測場景</th><th>學生 / 顧客</th><th>AI 結果</th><th>狀態</th></tr>
+                <tr><th>時間</th><th>學生 / 顧客</th><th>AI 結果</th><th>狀態</th></tr>
               </thead>
               <tbody id="recordTableTop"></tbody>
             </table>
@@ -995,15 +995,6 @@
             <div class="analysis-panel">
               <div class="card card-pad">
                 <div class="select-row">
-                  <div class="field">
-                    <label>檢測場景</label>
-                    <select id="sceneSelect">
-                      <option>校園食堂</option>
-                      <option>托管中心</option>
-                      <option>活動供餐</option>
-                      <option>醫院 / 養老院</option>
-                    </select>
-                  </div>
                   <div class="field">
                     <label>顧客 / 學生</label>
                     <select id="customerSelect"></select>
@@ -1093,7 +1084,7 @@
             </div>
             <table>
               <thead>
-                <tr><th>時間</th><th>場景</th><th>對象</th><th>異物</th><th>過敏原</th><th>狀態</th></tr>
+                <tr><th>時間</th><th>對象</th><th>AI 結果</th><th>提醒</th><th>狀態</th></tr>
               </thead>
               <tbody id="recordTableFull"></tbody>
             </table>
@@ -1189,7 +1180,6 @@ const state = {
   analyzed: false,
   risk: "high",
   score: 82,
-  scene: "校園食堂",
   person: "梁同學｜花生、蝦",
   summary: "偵測到疑似塑膠碎片，並命中花生過敏原。建議暫停食用並由工作人員覆核。",
   alerts: [
@@ -1204,10 +1194,10 @@ const state = {
   ],
   detections: [],
   records: [
-    ["12:04","校園食堂","梁同學","疑似塑膠碎片","花生","danger"],
-    ["11:58","校園食堂","陳同學","未見異常","牛奶提醒","warn"],
-    ["11:45","活動供餐","訪客模式","未見異常","無","safe"],
-    ["11:33","托管中心","黃先生","頭髮疑似物","無","danger"]
+    ["12:04","梁同學","疑似塑膠碎片","花生","danger"],
+    ["11:58","陳同學","未見異常","牛奶提醒","warn"],
+    ["11:45","訪客模式","未見異常","無","safe"],
+    ["11:33","黃先生","頭髮疑似物","無","danger"]
   ]
 };
 
@@ -1315,7 +1305,6 @@ async function analyzePlate(){
       title:d.label,
       desc:`${d.description}（置信度 ${Math.round((d.confidence || 0)*100)}%）`
     })) : [{type:"green",title:"未发现明显风险",desc:"AI 未发现明显过敏原或异物，仍建议人工确认。"}];
-    state.scene = document.getElementById("sceneSelect").value;
     state.person = document.getElementById("customerSelect").selectedOptions[0]?.textContent || "访客模式";
     document.getElementById("uploadZone").classList.add("analyzed");
     renderBoxes();
@@ -1378,7 +1367,16 @@ function renderDashboardResult(){
 
 function addRecord(){
   const now = new Date().toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"});
-  state.records.unshift([now,state.scene,state.person.split("｜")[0],"疑似塑膠碎片","花生","danger"]);
+  const primaryAlert = state.alerts[0] || {title:"未見異常"};
+  const allergenAlert = state.alerts.find(a=>a.type === "amber");
+  const status = state.risk === "low" ? "safe" : state.risk === "medium" ? "warn" : "danger";
+  state.records.unshift([
+    now,
+    state.person.split("｜")[0],
+    primaryAlert.title || "分析完成",
+    allergenAlert?.title || (state.risk === "low" ? "無" : "需人工覆核"),
+    status
+  ]);
   state.records = state.records.slice(0,8);
   renderTables();
 }
@@ -1389,17 +1387,23 @@ function renderTables(){
     warn:["warn","需注意"],
     danger:["danger","需覆核"]
   };
-  const rows = state.records.map(r=>{
-    const s = statusMap[r[5]];
+  const normalizeRecord = (r) => {
+    if(r.length >= 6){
+      return [r[0], r[2], r[3], r[4], r[5]];
+    }
+    return r;
+  };
+  const rows = state.records.map(normalizeRecord).map(r=>{
+    const s = statusMap[r[4]] || statusMap.warn;
     return `<tr>
-      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td>
+      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td>
       <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
     </tr>`;
   }).join("");
-  const topRows = state.records.slice(0,4).map(r=>{
-    const s = statusMap[r[5]];
+  const topRows = state.records.slice(0,4).map(normalizeRecord).map(r=>{
+    const s = statusMap[r[4]] || statusMap.warn;
     return `<tr>
-      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]} / ${r[4]}</td>
+      <td>${r[0]}</td><td>${r[1]}</td><td>${r[2]} / ${r[3]}</td>
       <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
     </tr>`;
   }).join("");
