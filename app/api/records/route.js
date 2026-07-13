@@ -5,7 +5,10 @@ export const runtime = "nodejs";
 const SUPABASE_TABLE = "scan_records";
 
 function getSupabaseConfig() {
-  const url = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+  const url = (process.env.SUPABASE_URL || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\/rest\/v1$/i, "");
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   return { url, serviceRoleKey, configured: Boolean(url && serviceRoleKey) };
 }
