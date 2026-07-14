@@ -336,6 +336,74 @@
       position:absolute;
       inset:0;
     }
+    #autoVideo{
+      display:none;
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      position:absolute;
+      inset:0;
+      background:#101827;
+    }
+    .upload-zone.auto-live{
+      border-style:solid;
+      background:#101827;
+      cursor:default;
+    }
+    .upload-zone.auto-live #autoVideo{display:block}
+    .upload-zone.auto-live .upload-placeholder{display:none}
+    .upload-zone.auto-live .scan-frame{display:block}
+    .auto-hud{
+      display:none;
+      position:absolute;
+      left:18px;
+      right:18px;
+      bottom:18px;
+      z-index:5;
+      color:#fff;
+      background:rgba(16,24,39,.72);
+      border:1px solid rgba(255,255,255,.18);
+      backdrop-filter:blur(12px);
+      border-radius:18px;
+      padding:12px 14px;
+      box-shadow:0 18px 42px rgba(0,0,0,.25);
+    }
+    .upload-zone.auto-live .auto-hud{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .auto-hud strong{display:block;font-size:14px;margin-bottom:3px}
+    .auto-hud span{font-size:12px;color:rgba(255,255,255,.78)}
+    .auto-dot{
+      width:10px;height:10px;border-radius:50%;
+      background:#44d0a3;
+      box-shadow:0 0 0 8px rgba(68,208,163,.16);
+      flex:0 0 auto;
+    }
+    .auto-dot.warn{background:#f2ad3d;box-shadow:0 0 0 8px rgba(242,173,61,.16)}
+    .auto-dot.danger{background:#ff6565;box-shadow:0 0 0 8px rgba(255,101,101,.16)}
+    .auto-panel{
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:14px;
+      background:linear-gradient(180deg,#fff,#f7fbfd);
+    }
+    .auto-panel .mini{
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.55;
+      margin:8px 0 0;
+    }
+    .auto-status{
+      margin-top:10px;
+      border-radius:14px;
+      padding:10px 12px;
+      background:var(--green-2);
+      color:#156c54;
+      font-size:13px;
+      font-weight:800;
+      line-height:1.5;
+    }
+    .auto-status.warn{background:var(--amber-2);color:#8a5600}
+    .auto-status.danger{background:var(--red-2);color:var(--red)}
+    .auto-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
     .scan-frame{
       display:none;
       position:absolute;
@@ -958,7 +1026,7 @@
         <div class="page" id="page-scan">
           <div class="workspace">
             <div class="card card-pad">
-              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()">
+              <div class="upload-zone" id="uploadZone" onclick="handleUploadZoneClick()">
                 <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
                 <div class="upload-placeholder" id="uploadPlaceholder">
                   <div class="upload-icon">
@@ -967,9 +1035,17 @@
                   <h3>上傳或拍攝餐盤照片</h3>
                   <p>支援手機、平板或電腦上傳。AI 將自動進行異物掃描、食材辨識與過敏原比對。</p>
                 </div>
+                <video id="autoVideo" autoplay muted playsinline></video>
                 <img id="previewImage" alt="餐盤照片預覽" />
                 <div class="scan-frame"></div>
                 <div class="bbox-layer" id="bboxLayer"></div>
+                <div class="auto-hud" id="autoHud">
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="auto-dot" id="autoHudDot"></div>
+                    <div><strong id="autoHudTitle">自动模式待命</strong><span id="autoHudText">等待餐盘进入画面</span></div>
+                  </div>
+                  <span id="autoPresenceText">画面检测 0%</span>
+                </div>
               </div>
               <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
                 <button class="btn btn-primary" id="analyzeBtn" onclick="event.stopPropagation(); analyzePlate();">
@@ -982,6 +1058,27 @@
             </div>
 
             <div class="analysis-panel">
+              <div class="card card-pad">
+                <div class="auto-panel">
+                  <div class="select-row">
+                    <div class="field">
+                      <label>自动模式风险阈值</label>
+                      <input id="autoThreshold" type="number" min="0" max="100" value="60" placeholder="例如：60" />
+                    </div>
+                    <div class="field">
+                      <label>餐盘稳定秒数</label>
+                      <input id="autoStableSeconds" type="number" min="1" max="10" value="3" />
+                    </div>
+                  </div>
+                  <p class="mini">打开自动模式后会常驻摄像头；画面检测到餐盘/饭菜稳定数秒后自动拍照识别。AI 风险分数低于阈值会自动继续，高于或等于阈值需要人工确认。</p>
+                  <div class="auto-actions">
+                    <button class="btn btn-primary" id="autoStartBtn" onclick="startAutoMode()">开启自动模式</button>
+                    <button class="btn btn-ghost" id="autoStopBtn" onclick="stopAutoMode()" disabled>关闭自动模式</button>
+                    <button class="btn btn-blue" id="autoConfirmBtn" onclick="confirmAutoRisk()" style="display:none;">人工确认，继续下一盘</button>
+                  </div>
+                  <div class="auto-status" id="autoStatus">自动模式未开启</div>
+                </div>
+              </div>
               <div class="card card-pad">
                 <div class="select-row">
                   <div class="field">
@@ -1182,6 +1279,21 @@ const state = {
   records: []
 };
 
+const autoState = {
+  enabled: false,
+  stream: null,
+  monitorTimer: null,
+  phase: "off",
+  threshold: 60,
+  stableMs: 3000,
+  resultMs: 5000,
+  clearMs: 1600,
+  stableSince: 0,
+  clearSince: 0,
+  busy: false,
+  lastPresenceScore: 0
+};
+
 const pageInfo = {
   dashboard:["總覽儀表板","以一張餐盤照片，同步完成異物預警、過敏原比對與結果展示。"],
   scan:["AI 檢測工作台","上傳餐盤照片，提交 AI 讀取，並把結果投影到 iPad 或第二螢幕。"],
@@ -1223,6 +1335,11 @@ document.getElementById("photoInput").addEventListener("change", async function(
   }
 });
 
+function handleUploadZoneClick(){
+  if(autoState.enabled) return;
+  document.getElementById("photoInput").click();
+}
+
 function compressImage(file){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -1256,8 +1373,9 @@ function setPreview(src){
   zone.classList.remove("analyzed");
 }
 
-async function analyzePlate(){
+async function analyzePlate(options = {}){
   if(!state.image){
+    if(options.noSample) return {ok:false, error:"没有可分析的图片"};
     loadSample();
   }
   const btn = document.getElementById("analyzeBtn");
@@ -1294,12 +1412,221 @@ async function analyzePlate(){
     await addRecord();
     syncState();
     showToast("AI 檢測完成，結果已同步");
+    return {ok:true, score:state.score, risk:state.risk};
   }catch(error){
     showToast(error.message || "AI 分析失败，请重试");
+    return {ok:false, error:error.message || "AI 分析失败"};
   }finally{
     btn.disabled = false;
     spinner.style.display = "none";
     text.textContent = state.analyzed ? "重新提交 AI 讀取" : "提交 AI 讀取";
+  }
+}
+
+async function startAutoMode(){
+  if(autoState.enabled) return;
+  const threshold = Number(document.getElementById("autoThreshold").value);
+  const stableSeconds = Number(document.getElementById("autoStableSeconds").value);
+  if(!Number.isFinite(threshold) || threshold < 0 || threshold > 100){
+    showToast("风险阈值请填写 0-100");
+    return;
+  }
+  if(!Number.isFinite(stableSeconds) || stableSeconds < 1 || stableSeconds > 10){
+    showToast("稳定秒数请填写 1-10");
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    autoState.enabled = true;
+    autoState.stream = stream;
+    autoState.threshold = threshold;
+    autoState.stableMs = stableSeconds * 1000;
+    autoState.phase = "waitingPlate";
+    autoState.stableSince = 0;
+    autoState.clearSince = 0;
+    autoState.busy = false;
+    const video = document.getElementById("autoVideo");
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById("uploadZone").classList.add("auto-live");
+    document.getElementById("autoStartBtn").disabled = true;
+    document.getElementById("autoStopBtn").disabled = false;
+    document.getElementById("autoConfirmBtn").style.display = "none";
+    updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，等待餐盘进入画面`);
+    autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
+  }catch(error){
+    showToast("无法打开摄像头，请检查浏览器权限");
+    updateAutoStatus("danger", "摄像头开启失败，请允许浏览器使用相机");
+  }
+}
+
+function stopAutoMode(){
+  autoState.enabled = false;
+  autoState.phase = "off";
+  autoState.busy = false;
+  if(autoState.monitorTimer) clearInterval(autoState.monitorTimer);
+  autoState.monitorTimer = null;
+  if(autoState.stream){
+    autoState.stream.getTracks().forEach(track=>track.stop());
+  }
+  autoState.stream = null;
+  const video = document.getElementById("autoVideo");
+  video.pause();
+  video.srcObject = null;
+  document.getElementById("uploadZone").classList.remove("auto-live");
+  document.getElementById("autoStartBtn").disabled = false;
+  document.getElementById("autoStopBtn").disabled = true;
+  document.getElementById("autoConfirmBtn").style.display = "none";
+  updateAutoStatus("off", "自动模式未开启");
+}
+
+function confirmAutoRisk(){
+  if(!autoState.enabled) return;
+  document.getElementById("autoConfirmBtn").style.display = "none";
+  restoreAutoLiveView();
+  autoState.phase = "waitingClear";
+  autoState.clearSince = 0;
+  updateAutoStatus("waitingClear", "已人工确认。请移走当前餐盘，系统会等待下一盘。");
+}
+
+function updateAutoStatus(kind, message){
+  const status = document.getElementById("autoStatus");
+  const hudDot = document.getElementById("autoHudDot");
+  const hudTitle = document.getElementById("autoHudTitle");
+  const hudText = document.getElementById("autoHudText");
+  status.className = "auto-status";
+  hudDot.className = "auto-dot";
+  if(kind === "danger" || kind === "needsConfirm"){
+    status.classList.add("danger");
+    hudDot.classList.add("danger");
+  }else if(kind === "capturing" || kind === "showingLow" || kind === "waitingClear"){
+    status.classList.add("warn");
+    hudDot.classList.add("warn");
+  }
+  status.textContent = message;
+  hudTitle.textContent = kind === "off" ? "自动模式未开启" : kind === "needsConfirm" ? "需要人工确认" : kind === "capturing" ? "正在 AI 识别" : "自动模式运行中";
+  hudText.textContent = message;
+}
+
+function getMealPresenceScore(){
+  const video = document.getElementById("autoVideo");
+  if(!video.videoWidth || !video.videoHeight) return 0;
+  const canvas = getMealPresenceScore.canvas || (getMealPresenceScore.canvas = document.createElement("canvas"));
+  const width = 96, height = 72;
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext("2d", {willReadFrequently:true});
+  ctx.drawImage(video, 0, 0, width, height);
+  const data = ctx.getImageData(0,0,width,height).data;
+  let colorful = 0, foodLike = 0, bright = 0, contrast = 0;
+  let prevLum = null;
+  const total = width * height;
+  for(let i=0;i<data.length;i+=4){
+    const r=data[i], g=data[i+1], b=data[i+2];
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    const lum=(r+g+b)/3;
+    const sat=max ? (max-min)/max : 0;
+    if(lum > 45 && lum < 245) bright++;
+    if(sat > .20 && lum > 45) colorful++;
+    if((r > g * .95 && r > b * 1.08 && lum > 55) || (g > r * .9 && g > b * 1.08 && lum > 55)) foodLike++;
+    if(prevLum !== null && Math.abs(lum - prevLum) > 28) contrast++;
+    prevLum = lum;
+  }
+  const score = Math.round(Math.min(100, (colorful/total)*95 + (foodLike/total)*80 + (contrast/total)*40 + (bright/total)*10));
+  return score;
+}
+
+async function monitorAutoFrame(){
+  if(!autoState.enabled || autoState.busy) return;
+  const now = Date.now();
+  const presenceScore = getMealPresenceScore();
+  autoState.lastPresenceScore = presenceScore;
+  document.getElementById("autoPresenceText").textContent = `画面检测 ${presenceScore}%`;
+  const hasMeal = presenceScore >= 24;
+
+  if(autoState.phase === "waitingPlate"){
+    if(hasMeal){
+      if(!autoState.stableSince) autoState.stableSince = now;
+      const remain = Math.max(0, Math.ceil((autoState.stableMs - (now - autoState.stableSince))/1000));
+      updateAutoStatus("waitingPlate", remain ? `检测到餐盘，保持稳定 ${remain} 秒后自动拍照` : "餐盘稳定，准备拍照");
+      if(now - autoState.stableSince >= autoState.stableMs){
+        await captureAndAnalyzeAuto();
+      }
+    }else{
+      autoState.stableSince = 0;
+      updateAutoStatus("waitingPlate", "等待餐盘进入画面");
+    }
+  }else if(autoState.phase === "waitingClear"){
+    if(!hasMeal){
+      if(!autoState.clearSince) autoState.clearSince = now;
+      if(now - autoState.clearSince >= autoState.clearMs){
+        autoState.phase = "waitingPlate";
+        autoState.stableSince = 0;
+        autoState.clearSince = 0;
+        updateAutoStatus("waitingPlate", "已准备好，等待下一份餐盘");
+      }else{
+        updateAutoStatus("waitingClear", "画面正在清空，马上进入下一轮");
+      }
+    }else{
+      autoState.clearSince = 0;
+      updateAutoStatus("waitingClear", "请移走当前餐盘，系统才会识别下一盘");
+    }
+  }
+}
+
+function captureAutoImage(){
+  const video = document.getElementById("autoVideo");
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", .82);
+}
+
+function restoreAutoLiveView(){
+  const img = document.getElementById("previewImage");
+  img.style.display = "none";
+  document.getElementById("bboxLayer").innerHTML = "";
+  document.getElementById("uploadZone").classList.remove("has-image", "analyzed");
+}
+
+async function captureAndAnalyzeAuto(){
+  autoState.busy = true;
+  autoState.phase = "capturing";
+  updateAutoStatus("capturing", "已自动拍照，AI 正在识别风险");
+  state.image = captureAutoImage();
+  setPreview(state.image);
+  document.getElementById("uploadZone").classList.add("auto-live");
+  const result = await analyzePlate({noSample:true});
+  if(!autoState.enabled){
+    autoState.busy = false;
+    return;
+  }
+  if(!result.ok){
+    autoState.phase = "waitingClear";
+    autoState.busy = false;
+    updateAutoStatus("danger", "本次识别失败，请移走餐盘后重试");
+    return;
+  }
+  if(state.score < autoState.threshold){
+    autoState.phase = "showingLow";
+    updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${Math.round(autoState.resultMs/1000)} 秒后等待下一盘`);
+    setTimeout(()=>{
+      if(!autoState.enabled) return;
+      restoreAutoLiveView();
+      autoState.phase = "waitingClear";
+      autoState.clearSince = 0;
+      autoState.busy = false;
+      updateAutoStatus("waitingClear", "本盘已自动通过。请移走餐盘，等待下一盘。");
+    }, autoState.resultMs);
+  }else{
+    autoState.phase = "needsConfirm";
+    autoState.busy = false;
+    document.getElementById("autoConfirmBtn").style.display = "inline-flex";
+    updateAutoStatus("needsConfirm", `风险分 ${state.score} 达到阈值 ${autoState.threshold}，请人工确认后继续`);
   }
 }
 
