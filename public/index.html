@@ -335,6 +335,7 @@
       object-fit:cover;
       position:absolute;
       inset:0;
+      z-index:1;
     }
     #autoVideo{
       display:none;
@@ -344,6 +345,7 @@
       position:absolute;
       inset:0;
       background:#101827;
+      z-index:1;
     }
     .upload-zone.auto-live{
       border-style:solid;
@@ -351,6 +353,8 @@
       cursor:default;
     }
     .upload-zone.auto-live #autoVideo{display:block}
+    .upload-zone.auto-live:not(.auto-review) #previewImage{display:none!important}
+    .upload-zone.auto-live.auto-review #previewImage{display:block}
     .upload-zone.auto-live .upload-placeholder{display:none}
     .upload-zone.auto-live .scan-frame{display:block}
     .auto-hud{
@@ -1451,6 +1455,7 @@ async function startAutoMode(){
     const video = document.getElementById("autoVideo");
     video.srcObject = stream;
     await video.play();
+    restoreAutoLiveView();
     document.getElementById("uploadZone").classList.add("auto-live");
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
@@ -1476,7 +1481,7 @@ function stopAutoMode(){
   const video = document.getElementById("autoVideo");
   video.pause();
   video.srcObject = null;
-  document.getElementById("uploadZone").classList.remove("auto-live");
+  document.getElementById("uploadZone").classList.remove("auto-live", "auto-review");
   document.getElementById("autoStartBtn").disabled = false;
   document.getElementById("autoStopBtn").disabled = true;
   document.getElementById("autoConfirmBtn").style.display = "none";
@@ -1590,7 +1595,7 @@ function restoreAutoLiveView(){
   const img = document.getElementById("previewImage");
   img.style.display = "none";
   document.getElementById("bboxLayer").innerHTML = "";
-  document.getElementById("uploadZone").classList.remove("has-image", "analyzed");
+  document.getElementById("uploadZone").classList.remove("has-image", "analyzed", "auto-review");
 }
 
 async function captureAndAnalyzeAuto(){
@@ -1599,7 +1604,7 @@ async function captureAndAnalyzeAuto(){
   updateAutoStatus("capturing", "已自动拍照，AI 正在识别风险");
   state.image = captureAutoImage();
   setPreview(state.image);
-  document.getElementById("uploadZone").classList.add("auto-live");
+  document.getElementById("uploadZone").classList.add("auto-live", "auto-review");
   const result = await analyzePlate({noSample:true});
   if(!autoState.enabled){
     autoState.busy = false;
