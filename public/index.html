@@ -482,34 +482,6 @@
     }
     .field textarea{min-height:90px;resize:vertical}
 
-    .allergen-tags{
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-    }
-    .tag-check{
-      position:relative;
-    }
-    .tag-check input{display:none}
-    .tag-check span{
-      display:inline-flex;
-      align-items:center;
-      gap:7px;
-      padding:9px 11px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background:#fff;
-      color:#4c5d70;
-      font-size:13px;
-      font-weight:800;
-      transition:.2s;
-    }
-    .tag-check input:checked + span{
-      background:var(--amber-2);
-      border-color:rgba(199,131,18,.30);
-      color:#8a5600;
-    }
-
     .result-card{
       border-radius:20px;
       padding:16px;
@@ -1155,17 +1127,6 @@
                   <div class="field">
                     <label>顧客 / 學生</label>
                     <select id="customerSelect"></select>
-                  </div>
-                </div>
-                <div class="field" style="margin-top:14px;">
-                  <label>本次食材 / 過敏原清單</label>
-                  <div class="allergen-tags">
-                    <label class="tag-check"><input type="checkbox" checked><span>花生</span></label>
-                    <label class="tag-check"><input type="checkbox"><span>牛奶</span></label>
-                    <label class="tag-check"><input type="checkbox" checked><span>蝦</span></label>
-                    <label class="tag-check"><input type="checkbox"><span>小麥</span></label>
-                    <label class="tag-check"><input type="checkbox"><span>堅果</span></label>
-                    <label class="tag-check"><input type="checkbox"><span>蛋</span></label>
                   </div>
                 </div>
               </div>
