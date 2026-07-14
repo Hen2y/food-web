@@ -35,6 +35,7 @@ function toClientRecord(row) {
     risk: row.risk || "medium",
     score: Number(row.score) || 0,
     allergenHit: Boolean(row.allergen_hit),
+    image: row.image_data || "",
     createdAt,
   };
 }
@@ -51,6 +52,7 @@ function toDatabaseRecord(record) {
     score: Math.min(100, Math.max(0, Number(record.score) || 0)),
     allergen_hit: Boolean(record.allergenHit),
     summary: String(record.summary || "").slice(0, 500),
+    image_data: String(record.image || "").slice(0, 900000),
   };
 }
 

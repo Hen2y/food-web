@@ -844,6 +844,73 @@
     }
     .toast.show{transform:translateY(0);opacity:1}
 
+    .record-thumb-btn{
+      width:68px;
+      height:48px;
+      padding:0;
+      border:1px solid var(--line);
+      border-radius:14px;
+      overflow:hidden;
+      background:#f4f7fb;
+      cursor:pointer;
+      box-shadow:0 8px 18px rgba(30,58,90,.08);
+    }
+    .record-thumb-btn img{
+      width:100%;
+      height:100%;
+      display:block;
+      object-fit:cover;
+    }
+    .record-no-image{
+      color:var(--muted);
+      font-size:13px;
+      white-space:nowrap;
+    }
+    .image-modal{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:22px;
+      background:rgba(15,23,42,.64);
+      backdrop-filter:blur(8px);
+      z-index:70;
+    }
+    .image-modal.show{display:flex}
+    .image-modal-card{
+      position:relative;
+      width:min(920px,96vw);
+      max-height:88vh;
+      padding:16px;
+      border-radius:28px;
+      background:#fff;
+      box-shadow:0 28px 80px rgba(0,0,0,.28);
+    }
+    .image-modal-card img{
+      width:100%;
+      max-height:76vh;
+      display:block;
+      object-fit:contain;
+      border-radius:20px;
+      background:#eef3f8;
+    }
+    .image-modal-close{
+      position:absolute;
+      top:10px;
+      right:10px;
+      width:38px;
+      height:38px;
+      border:0;
+      border-radius:999px;
+      background:#17212f;
+      color:#fff;
+      font-size:22px;
+      font-weight:900;
+      cursor:pointer;
+      box-shadow:0 10px 24px rgba(0,0,0,.22);
+    }
+
     .spinner{
       width:18px;height:18px;border-radius:50%;
       border:3px solid rgba(255,255,255,.45);
@@ -1019,7 +1086,7 @@
             </div>
             <table>
               <thead>
-                <tr><th>時間</th><th>學生 / 顧客</th><th>AI 結果</th><th>狀態</th></tr>
+                <tr><th>時間</th><th>餐盤</th><th>學生 / 顧客</th><th>AI 結果</th><th>狀態</th></tr>
               </thead>
               <tbody id="recordTableTop"></tbody>
             </table>
@@ -1174,7 +1241,7 @@
             </div>
             <table>
               <thead>
-                <tr><th>時間</th><th>對象</th><th>AI 結果</th><th>提醒</th><th>狀態</th></tr>
+                <tr><th>時間</th><th>餐盤</th><th>對象</th><th>AI 結果</th><th>提醒</th><th>狀態</th></tr>
               </thead>
               <tbody id="recordTableFull"></tbody>
             </table>
@@ -1262,6 +1329,13 @@
     </div>
   </div>
 
+  <div class="image-modal" id="recordImageModal" onclick="closeRecordImage(event)">
+    <div class="image-modal-card" onclick="event.stopPropagation()">
+      <button class="image-modal-close" type="button" onclick="closeRecordImage()" aria-label="關閉">×</button>
+      <img id="recordImagePreview" alt="歷史記錄餐盤圖片" />
+    </div>
+  </div>
+
   <div class="toast" id="toast">已更新</div>
 
 <script>
@@ -1282,6 +1356,7 @@ const state = {
   detections: [],
   records: []
 };
+let recordImageStore = [];
 
 const autoState = {
   enabled: false,
@@ -1364,6 +1439,25 @@ function compressImage(file){
       image.src=reader.result;
     };
     reader.readAsDataURL(file);
+  });
+}
+
+function createHistoryImage(src){
+  return new Promise((resolve)=>{
+    if(!src) return resolve("");
+    const image = new Image();
+    image.onload = ()=>{
+      const maxSide = 520;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", .68));
+    };
+    image.onerror = ()=>resolve("");
+    image.src = src;
   });
 }
 
@@ -1695,6 +1789,7 @@ async function addRecord(){
   const primaryAlert = state.alerts[0] || {title:"未見異常"};
   const allergenAlert = state.alerts.find(a=>a.type === "amber");
   const status = state.risk === "low" ? "safe" : state.risk === "medium" ? "warn" : "danger";
+  const historyImage = await createHistoryImage(state.image);
   const record = {
     dateISO: formatDateKey(nowDate),
     time: nowDate.toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"}),
@@ -1706,6 +1801,7 @@ async function addRecord(){
     score: state.score,
     allergenHit: Boolean(allergenAlert),
     summary: state.summary,
+    image: historyImage,
     createdAt: nowDate.toISOString()
   };
   state.records.unshift(record);
@@ -1734,14 +1830,15 @@ function normalizeRecord(r){
       result: r.result || "分析完成",
       notice: r.notice || "無",
       status: r.status || "warn",
-      allergenHit: Boolean(r.allergenHit)
+      allergenHit: Boolean(r.allergenHit),
+      image: r.image || r.imageData || ""
     };
   }
   if(Array.isArray(r) && r.length >= 6){
-    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[2], result:r[3], notice:r[4], status:r[5], allergenHit:Boolean(r[4] && r[4] !== "無")};
+    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[2], result:r[3], notice:r[4], status:r[5], allergenHit:Boolean(r[4] && r[4] !== "無"), image:""};
   }
   if(Array.isArray(r)){
-    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[1], result:r[2], notice:r[3], status:r[4], allergenHit:Boolean(r[3] && r[3] !== "無")};
+    return {dateISO:formatDateKey(new Date()), time:r[0], person:r[1], result:r[2], notice:r[3], status:r[4], allergenHit:Boolean(r[3] && r[3] !== "無"), image:""};
   }
   return null;
 }
@@ -1816,6 +1913,31 @@ function renderDashboardStats(){
   }).join("");
 }
 
+function recordImageCell(index){
+  const image = recordImageStore[index];
+  if(!image) return `<span class="record-no-image">无图片</span>`;
+  return `<button class="record-thumb-btn" type="button" onclick="openRecordImage(${index})" title="查看餐盘图片">
+    <img src="${escapeHtml(image)}" alt="餐盘缩略图" loading="lazy" />
+  </button>`;
+}
+
+function openRecordImage(index){
+  const image = recordImageStore[index];
+  if(!image){
+    showToast("这条记录没有保存餐盘图片");
+    return;
+  }
+  document.getElementById("recordImagePreview").src = image;
+  document.getElementById("recordImageModal").classList.add("show");
+}
+
+function closeRecordImage(){
+  const modal = document.getElementById("recordImageModal");
+  const img = document.getElementById("recordImagePreview");
+  modal.classList.remove("show");
+  img.src = "";
+}
+
 function renderTables(){
   const statusMap = {
     safe:["safe","正常"],
@@ -1823,20 +1945,21 @@ function renderTables(){
     danger:["danger","需覆核"]
   };
   const records = getRealRecords();
-  const rows = records.map(r=>{
+  recordImageStore = records.map(r=>r.image || "");
+  const rows = records.map((r,index)=>{
     const s = statusMap[r.status] || statusMap.warn;
     return `<tr>
-      <td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)}</td><td>${escapeHtml(r.notice)}</td>
+      <td>${escapeHtml(r.time)}</td><td>${recordImageCell(index)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)}</td><td>${escapeHtml(r.notice)}</td>
+      <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6">暂无真实检测记录</td></tr>`;
+  const topRows = records.slice(0,4).map((r,index)=>{
+    const s = statusMap[r.status] || statusMap.warn;
+    return `<tr>
+      <td>${escapeHtml(r.time)}</td><td>${recordImageCell(index)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)} / ${escapeHtml(r.notice)}</td>
       <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5">暂无真实检测记录</td></tr>`;
-  const topRows = records.slice(0,4).map(r=>{
-    const s = statusMap[r.status] || statusMap.warn;
-    return `<tr>
-      <td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.person)}</td><td>${escapeHtml(r.result)} / ${escapeHtml(r.notice)}</td>
-      <td><span class="status-pill ${s[0]}">${s[1]}</span></td>
-    </tr>`;
-  }).join("") || `<tr><td colspan="4">暂无真实检测记录</td></tr>`;
   document.getElementById("recordTableFull").innerHTML = rows;
   document.getElementById("recordTableTop").innerHTML = topRows;
 }

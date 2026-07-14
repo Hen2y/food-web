@@ -10,8 +10,12 @@ create table if not exists public.scan_records (
   risk text not null check (risk in ('low', 'medium', 'high')),
   score integer not null default 0 check (score >= 0 and score <= 100),
   allergen_hit boolean not null default false,
+  image_data text,
   summary text
 );
+
+alter table public.scan_records
+  add column if not exists image_data text;
 
 create index if not exists scan_records_created_at_idx
   on public.scan_records (created_at desc);
