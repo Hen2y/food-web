@@ -1357,6 +1357,7 @@ const state = {
   records: []
 };
 let recordImageStore = [];
+let customerProjectionWindow = null;
 
 const autoState = {
   enabled: false,
@@ -1471,6 +1472,16 @@ function setPreview(src){
   zone.classList.remove("analyzed");
 }
 
+function prepareAutoProjectionWaiting(){
+  state.image = "";
+  state.analyzed = false;
+  state.risk = "low";
+  state.score = 0;
+  state.summary = "自动模式已开启，等待下一份餐盘完成 AI 识别。";
+  state.alerts = [];
+  state.detections = [];
+}
+
 async function analyzePlate(options = {}){
   if(!state.image){
     if(options.noSample) return {ok:false, error:"没有可分析的图片"};
@@ -1533,6 +1544,8 @@ async function startAutoMode(){
     showToast("稳定秒数请填写 1-10");
     return;
   }
+  prepareAutoProjectionWaiting();
+  ensureCustomerProjection({reason:"auto-start"});
   try{
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -1710,6 +1723,7 @@ async function captureAndAnalyzeAuto(){
     updateAutoStatus("danger", "本次识别失败，请移走餐盘后重试");
     return;
   }
+  projectCurrentResultToCustomer();
   if(state.score < autoState.threshold){
     autoState.phase = "showingLow";
     updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${Math.round(autoState.resultMs/1000)} 秒后等待下一盘`);
@@ -2043,15 +2057,46 @@ function getSyncedState(){
   }catch(e){return state;}
 }
 
-function openCustomerScreen(){
+function getCustomerScreenUrl(){
+  return location.href.split("#")[0] + "#customer";
+}
+
+function ensureCustomerProjection(options = {}){
   syncState();
-  const url = location.href.split("#")[0] + "#customer";
-  const win = window.open(url, "SafePlateCustomerDisplay", "width=1180,height=820");
-  if(!win){
-    showToast("請允許瀏覽器彈出視窗");
+  const url = getCustomerScreenUrl();
+  if(customerProjectionWindow && !customerProjectionWindow.closed){
+    try{
+      customerProjectionWindow.location.href = url;
+      customerProjectionWindow.focus();
+    }catch(e){}
+    return true;
+  }
+  customerProjectionWindow = window.open(url, "SafePlateCustomerDisplay", "width=1180,height=820");
+  if(!customerProjectionWindow){
+    showToast("浏览器拦截了顾客屏幕，请先点击右上角“投影到顾客螢幕”授权弹窗");
+    return false;
+  }
+  if(options.reason === "auto-start"){
+    showToast("自动模式已打开顾客屏幕，之后会自动同步每盘结果");
   }else{
     showToast("顧客展示畫面已開啟");
   }
+  return true;
+}
+
+function projectCurrentResultToCustomer(){
+  syncState();
+  if(customerProjectionWindow && !customerProjectionWindow.closed){
+    try{
+      customerProjectionWindow.postMessage({type:"safeplate:update"}, location.origin);
+    }catch(e){}
+  }else{
+    ensureCustomerProjection({reason:"auto-result"});
+  }
+}
+
+function openCustomerScreen(){
+  ensureCustomerProjection();
 }
 
 function updateCustomerScreen(){
@@ -2142,6 +2187,10 @@ function showToast(msg){
 }
 
 window.addEventListener("storage", updateCustomerScreen);
+window.addEventListener("message", event=>{
+  if(event.origin !== location.origin) return;
+  if(event.data?.type === "safeplate:update") updateCustomerScreen();
+});
 
 async function initMode(){
   const synced = getSyncedState();
