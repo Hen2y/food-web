@@ -797,6 +797,18 @@
       max-width:720px;
       line-height:1.6;
     }
+    .customer-close-result{
+      border:0;
+      border-radius:16px;
+      padding:12px 16px;
+      background:#17212f;
+      color:#fff;
+      font-weight:900;
+      cursor:pointer;
+      box-shadow:0 12px 28px rgba(15,23,42,.16);
+      white-space:nowrap;
+    }
+    .customer-close-result:hover{transform:translateY(-1px)}
 
     .toast{
       position:fixed;
@@ -1285,6 +1297,7 @@
 
       <div class="customer-foot">
         <div class="disclaimer">本結果由 AI 輔助判斷，不能替代人工檢查。如有疑問，請向現場職員確認。</div>
+        <button class="customer-close-result" type="button" onclick="customerContinueNext()">关闭结果，继续下一盘</button>
         <strong>盤安 SafePlate</strong>
       </div>
     </div>
@@ -1309,6 +1322,7 @@ const state = {
   person: "访客模式",
   summary: "尚未提交 AI 检测。",
   alerts: [],
+  presentationToken: "",
   profiles: [
     {id:"liang", name:"梁同学", allergens:["花生","虾"], sensitivity:"high"},
     {id:"chen", name:"陈同学", allergens:["牛奶","坚果"], sensitivity:"normal"},
@@ -1448,6 +1462,7 @@ function prepareAutoProjectionWaiting(){
   state.summary = "自动模式已开启，等待下一份餐盘完成 AI 识别。";
   state.alerts = [];
   state.detections = [];
+  state.presentationToken = "";
 }
 
 async function analyzePlate(options = {}){
@@ -1569,7 +1584,7 @@ function stopAutoMode(){
 function confirmAutoRisk(){
   if(!autoState.enabled) return;
   document.getElementById("autoConfirmBtn").style.display = "none";
-  waitForProjectionCloseBeforeNext("已人工确认。请关闭顾客屏幕，关闭后再识别下一盘。");
+  waitForProjectionCloseBeforeNext("已人工确认。请在顾客屏幕点击“关闭结果，继续下一盘”。");
 }
 
 function updateAutoStatus(kind, message){
@@ -1611,13 +1626,17 @@ function isCustomerProjectionOpen(){
   return Boolean(customerProjectionWindow && !customerProjectionWindow.closed);
 }
 
+function isCurrentProjectionAcknowledged(){
+  return Boolean(state.presentationToken && localStorage.getItem("safeplate_customer_ack_token") === state.presentationToken);
+}
+
 function waitForProjectionCloseBeforeNext(message){
   autoState.phase = "waitingProjectionClose";
   autoState.stableSince = 0;
   autoState.clearSince = 0;
   autoState.projectionWaitSince = Date.now();
   autoState.busy = false;
-  updateAutoStatus("waitingClear", message || "结果已投影。请关闭顾客屏幕后再进入下一盘识别。");
+  updateAutoStatus("waitingClear", message || "结果已投影。请在顾客屏幕点击“关闭结果，继续下一盘”。");
 }
 
 function getAutoFrameMetrics(){
@@ -1691,11 +1710,14 @@ async function monitorAutoFrame(){
       updateAutoStatus("waitingPlate", "等待餐盘进入画面");
     }
   }else if(autoState.phase === "waitingProjectionClose"){
-    if(isCustomerProjectionOpen()){
-      updateAutoStatus("waitingClear", "结果正在顾客屏幕展示。关闭顾客屏幕后，系统再识别下一盘。");
+    if(isCurrentProjectionAcknowledged()){
+      restoreAutoLiveView();
+      beginWaitingNextPlate("顾客已关闭结果。请换上下一份餐盘，系统会自动继续。");
+    }else if(isCustomerProjectionOpen()){
+      updateAutoStatus("waitingClear", "结果正在顾客屏幕展示。点击“关闭结果，继续下一盘”后再识别。");
     }else{
       restoreAutoLiveView();
-      beginWaitingNextPlate("顾客屏幕已关闭。请换上下一份餐盘，系统会自动继续。");
+      beginWaitingNextPlate("顾客屏幕窗口已关闭。请换上下一份餐盘，系统会自动继续。");
     }
   }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
     const waited = now - (autoState.waitNextSince || now);
@@ -1765,7 +1787,7 @@ async function captureAndAnalyzeAuto(){
     setTimeout(()=>{
       if(!autoState.enabled) return;
       if(isCustomerProjectionOpen()){
-        waitForProjectionCloseBeforeNext("本盘已自动通过。请关闭顾客屏幕，关闭后再识别下一盘。");
+        waitForProjectionCloseBeforeNext("本盘已自动通过。请在顾客屏幕点击“关闭结果，继续下一盘”。");
       }else{
         restoreAutoLiveView();
         beginWaitingNextPlate("本盘已自动通过。请直接换上下一份餐盘，系统会自动继续。");
@@ -2121,6 +2143,8 @@ function ensureCustomerProjection(options = {}){
 }
 
 function projectCurrentResultToCustomer(){
+  state.presentationToken = `projection_${Date.now()}`;
+  localStorage.removeItem("safeplate_customer_ack_token");
   syncState();
   if(customerProjectionWindow && !customerProjectionWindow.closed){
     try{
@@ -2133,6 +2157,29 @@ function projectCurrentResultToCustomer(){
 
 function openCustomerScreen(){
   ensureCustomerProjection();
+}
+
+function continueAutoAfterCustomerAck(){
+  if(!autoState.enabled) return;
+  if(autoState.phase === "waitingProjectionClose"){
+    restoreAutoLiveView();
+    beginWaitingNextPlate("顾客已关闭结果。请换上下一份餐盘，系统会自动继续。");
+  }
+}
+
+function handleCustomerReadyNext(token = ""){
+  if(token) localStorage.setItem("safeplate_customer_ack_token", token);
+  continueAutoAfterCustomerAck();
+}
+
+function customerContinueNext(){
+  const data = getSyncedState();
+  const token = data.presentationToken || "";
+  if(token) localStorage.setItem("safeplate_customer_ack_token", token);
+  if(window.opener && !window.opener.closed){
+    try{ window.opener.postMessage({type:"safeplate:customerReadyNext", token}, location.origin); }catch(e){}
+  }
+  updateCustomerScreen();
 }
 
 function updateCustomerScreen(){
@@ -2152,6 +2199,18 @@ function updateCustomerScreen(){
   const status = document.getElementById("customerStatus");
   const summary = document.getElementById("customerSummary");
   const list = document.getElementById("customerAlertList");
+  const acknowledged = Boolean(data.presentationToken && localStorage.getItem("safeplate_customer_ack_token") === data.presentationToken);
+
+  if(acknowledged){
+    image.style.display = "none";
+    noImage.style.display = "block";
+    noImage.textContent = "本次结果已关闭，等待下一份餐盘";
+    statusCard.className = "big-status medium";
+    status.textContent = "等待下一盘";
+    summary.textContent = "工作人员端会在下一份餐盘稳定后继续进行 AI 检测。";
+    list.innerHTML = `<div class="customer-alert green"><div class="icon">✓</div><div><strong>结果已确认</strong><span>请等待下一份餐盘检测结果同步。</span></div></div>`;
+    return;
+  }
 
   if(!data.analyzed){
     statusCard.className = "big-status medium";
@@ -2222,10 +2281,16 @@ function showToast(msg){
   setTimeout(()=>toast.classList.remove("show"),2200);
 }
 
-window.addEventListener("storage", updateCustomerScreen);
+window.addEventListener("storage", event=>{
+  updateCustomerScreen();
+  if(event.key === "safeplate_customer_ack_token"){
+    continueAutoAfterCustomerAck();
+  }
+});
 window.addEventListener("message", event=>{
   if(event.origin !== location.origin) return;
   if(event.data?.type === "safeplate:update") updateCustomerScreen();
+  if(event.data?.type === "safeplate:customerReadyNext") handleCustomerReadyNext(event.data.token || "");
 });
 
 async function initMode(){
