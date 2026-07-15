@@ -1329,10 +1329,16 @@ const autoState = {
   stableMs: 3000,
   resultMs: 5000,
   clearMs: 1600,
+  cooldownMs: 1800,
+  maxSameSceneWaitMs: 8000,
+  minFrameChange: 14,
   stableSince: 0,
   clearSince: 0,
+  waitNextSince: 0,
   busy: false,
-  lastPresenceScore: 0
+  lastPresenceScore: 0,
+  lastCaptureSignature: null,
+  currentSignature: null
 };
 
 const pageInfo = {
@@ -1519,6 +1525,9 @@ async function startAutoMode(){
     autoState.phase = "waitingPlate";
     autoState.stableSince = 0;
     autoState.clearSince = 0;
+    autoState.waitNextSince = 0;
+    autoState.lastCaptureSignature = null;
+    autoState.currentSignature = null;
     autoState.busy = false;
     const video = document.getElementById("autoVideo");
     video.srcObject = stream;
@@ -1560,9 +1569,7 @@ function confirmAutoRisk(){
   if(!autoState.enabled) return;
   document.getElementById("autoConfirmBtn").style.display = "none";
   restoreAutoLiveView();
-  autoState.phase = "waitingClear";
-  autoState.clearSince = 0;
-  updateAutoStatus("waitingClear", "已人工确认。请移走当前餐盘，系统会等待下一盘。");
+  beginWaitingNextPlate("已人工确认。请换上下一份餐盘，画面变化后会自动继续。");
 }
 
 function updateAutoStatus(kind, message){
@@ -1584,10 +1591,26 @@ function updateAutoStatus(kind, message){
   hudText.textContent = message;
 }
 
-function getMealPresenceScore(){
+function frameSignatureDistance(a, b){
+  if(!a || !b || a.length !== b.length) return 100;
+  let total = 0;
+  for(let i=0;i<a.length;i++) total += Math.abs(a[i] - b[i]);
+  return total / a.length;
+}
+
+function beginWaitingNextPlate(message){
+  autoState.phase = "waitingNext";
+  autoState.stableSince = 0;
+  autoState.clearSince = 0;
+  autoState.waitNextSince = Date.now();
+  autoState.busy = false;
+  updateAutoStatus("waitingClear", message || "等待下一份餐盘；换盘后会自动继续识别。");
+}
+
+function getAutoFrameMetrics(){
   const video = document.getElementById("autoVideo");
-  if(!video.videoWidth || !video.videoHeight) return 0;
-  const canvas = getMealPresenceScore.canvas || (getMealPresenceScore.canvas = document.createElement("canvas"));
+  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, signature:null};
+  const canvas = getAutoFrameMetrics.canvas || (getAutoFrameMetrics.canvas = document.createElement("canvas"));
   const width = 96, height = 72;
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext("2d", {willReadFrequently:true});
@@ -1596,6 +1619,7 @@ function getMealPresenceScore(){
   let colorful = 0, foodLike = 0, bright = 0, contrast = 0;
   let prevLum = null;
   const total = width * height;
+  const signature = [];
   for(let i=0;i<data.length;i+=4){
     const r=data[i], g=data[i+1], b=data[i+2];
     const max=Math.max(r,g,b), min=Math.min(r,g,b);
@@ -1607,15 +1631,37 @@ function getMealPresenceScore(){
     if(prevLum !== null && Math.abs(lum - prevLum) > 28) contrast++;
     prevLum = lum;
   }
-  const score = Math.round(Math.min(100, (colorful/total)*95 + (foodLike/total)*80 + (contrast/total)*40 + (bright/total)*10));
-  return score;
+  for(let gy=0; gy<6; gy++){
+    for(let gx=0; gx<8; gx++){
+      let sum = 0, count = 0;
+      const x0 = Math.floor((gx * width) / 8);
+      const x1 = Math.floor(((gx + 1) * width) / 8);
+      const y0 = Math.floor((gy * height) / 6);
+      const y1 = Math.floor(((gy + 1) * height) / 6);
+      for(let y=y0; y<y1; y++){
+        for(let x=x0; x<x1; x++){
+          const idx = (y * width + x) * 4;
+          sum += (data[idx] + data[idx+1] + data[idx+2]) / 3;
+          count++;
+        }
+      }
+      signature.push(count ? Math.round(sum / count) : 0);
+    }
+  }
+  const presenceScore = Math.round(Math.min(100, (colorful/total)*95 + (foodLike/total)*80 + (contrast/total)*40 + (bright/total)*10));
+  return {presenceScore, signature};
+}
+
+function getMealPresenceScore(){
+  return getAutoFrameMetrics().presenceScore;
 }
 
 async function monitorAutoFrame(){
   if(!autoState.enabled || autoState.busy) return;
   const now = Date.now();
-  const presenceScore = getMealPresenceScore();
+  const {presenceScore, signature} = getAutoFrameMetrics();
   autoState.lastPresenceScore = presenceScore;
+  autoState.currentSignature = signature;
   document.getElementById("autoPresenceText").textContent = `画面检测 ${presenceScore}%`;
   const hasMeal = presenceScore >= 24;
 
@@ -1631,20 +1677,28 @@ async function monitorAutoFrame(){
       autoState.stableSince = 0;
       updateAutoStatus("waitingPlate", "等待餐盘进入画面");
     }
-  }else if(autoState.phase === "waitingClear"){
+  }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
+    const waited = now - (autoState.waitNextSince || now);
+    const changed = frameSignatureDistance(signature, autoState.lastCaptureSignature);
     if(!hasMeal){
       if(!autoState.clearSince) autoState.clearSince = now;
-      if(now - autoState.clearSince >= autoState.clearMs){
+      if(now - autoState.clearSince >= autoState.clearMs || waited >= autoState.cooldownMs){
         autoState.phase = "waitingPlate";
         autoState.stableSince = 0;
         autoState.clearSince = 0;
         updateAutoStatus("waitingPlate", "已准备好，等待下一份餐盘");
       }else{
-        updateAutoStatus("waitingClear", "画面正在清空，马上进入下一轮");
+        updateAutoStatus("waitingClear", "正在切换到下一轮");
       }
+    }else if(waited >= autoState.cooldownMs && (changed >= autoState.minFrameChange || waited >= autoState.maxSameSceneWaitMs)){
+      autoState.phase = "waitingPlate";
+      autoState.stableSince = now;
+      autoState.clearSince = 0;
+      updateAutoStatus("waitingPlate", changed >= autoState.minFrameChange ? "检测到画面变化，正在确认下一份餐盘" : "已进入下一轮，请保持餐盘稳定");
     }else{
       autoState.clearSince = 0;
-      updateAutoStatus("waitingClear", "请移走当前餐盘，系统才会识别下一盘");
+      const seconds = Math.max(0, Math.ceil((autoState.cooldownMs - waited)/1000));
+      updateAutoStatus("waitingClear", seconds ? `结果展示结束后 ${seconds} 秒进入下一轮` : "等待换盘或画面变化后继续识别");
     }
   }
 }
@@ -1670,6 +1724,7 @@ async function captureAndAnalyzeAuto(){
   autoState.busy = true;
   autoState.phase = "capturing";
   updateAutoStatus("capturing", "已自动拍照，AI 正在识别风险");
+  autoState.lastCaptureSignature = autoState.currentSignature ? [...autoState.currentSignature] : null;
   state.image = captureAutoImage();
   setPreview(state.image);
   document.getElementById("uploadZone").classList.add("auto-live", "auto-review");
@@ -1679,9 +1734,8 @@ async function captureAndAnalyzeAuto(){
     return;
   }
   if(!result.ok){
-    autoState.phase = "waitingClear";
-    autoState.busy = false;
-    updateAutoStatus("danger", "本次识别失败，请移走餐盘后重试");
+    beginWaitingNextPlate("本次识别失败。请调整餐盘或换下一盘，画面变化后会重试。");
+    updateAutoStatus("danger", "本次识别失败，请调整餐盘或换下一盘后重试");
     return;
   }
   projectCurrentResultToCustomer();
@@ -1691,10 +1745,7 @@ async function captureAndAnalyzeAuto(){
     setTimeout(()=>{
       if(!autoState.enabled) return;
       restoreAutoLiveView();
-      autoState.phase = "waitingClear";
-      autoState.clearSince = 0;
-      autoState.busy = false;
-      updateAutoStatus("waitingClear", "本盘已自动通过。请移走餐盘，等待下一盘。");
+      beginWaitingNextPlate("本盘已自动通过。请直接换上下一份餐盘，系统会自动继续。");
     }, autoState.resultMs);
   }else{
     autoState.phase = "needsConfirm";
