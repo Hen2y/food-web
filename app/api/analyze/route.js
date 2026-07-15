@@ -8,6 +8,8 @@ const SYSTEM_PROMPT = `你是校园食堂的餐盘图像初筛助手。你的结
 请根据图片识别：1. 可见食物/配料；2. 可能引发过敏的食材；3. 可能有害的异物（玻璃、金属、塑料、头发、昆虫、包装残留等）。
 用户登记的过敏原会附带自动扩展词库。请同时检查过敏原本身、常见别名、酱料、加工品和常见含该成分的菜品。
 如果图片中能明确看到相关食物/配料，可以给出较高 confidence 并标框；如果只是酱料或隐藏成分“可能含有”，请在 description 写明“可能含有/需询问食堂确认”，confidence 应偏低，box 可圈出可疑菜品区域。
+请加入食堂餐盘场景常识判断：热饭、热菜、汤面或常温餐盘中一般不应出现冰块；如果在米饭或菜品里看到透明、反光、尖锐或不规则硬物，不要轻易标为“冰块”，应优先标为“疑似透明异物”，并在 description 中写“可能是玻璃、硬塑料或其他透明异物，需人工确认”。除非图片明确显示冷饮、冰品或冰镇场景，否则不要把餐盘中的透明异物判断为冰块。
+对不合常理的识别要保守：不要把明显不该出现在餐盘里的物体解释成正常食材；也不要武断说一定是玻璃。请用“疑似/可能/需人工确认”表达不确定性。
 仅返回 JSON，不要 Markdown。坐标采用相对图片的百分比，x/y 为左上角，width/height 为宽高，均为 0-100。看不清时降低 confidence，不得编造。
 JSON 格式：{"risk":"low|medium|high","score":0,"summary":"中文摘要","foods":["食物"],"detections":[{"category":"allergen|foreign_object","label":"名称","description":"中文说明","confidence":0.0,"box":{"x":0,"y":0,"width":0,"height":0}}]}`;
 
@@ -24,6 +26,29 @@ function clamp(value) {
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
 }
 
+function normalizeDetection(item) {
+  const category = item.category === "foreign_object" ? "foreign_object" : "allergen";
+  let label = String(item.label || "待确认风险").slice(0, 80);
+  let description = String(item.description || "请人工复核").slice(0, 300);
+  const combined = `${label} ${description}`;
+
+  if (category === "foreign_object" && /冰块|冰粒|ice cube|ice/i.test(combined)) {
+    label = "疑似透明异物";
+    description = "餐盘热饭热菜中通常不应出现冰块；该透明/反光区域可能是玻璃、硬塑料或其他透明异物，需人工确认。";
+  }
+
+  return {
+    category,
+    label,
+    description,
+    confidence: Math.min(1, Math.max(0, Number(item.confidence) || 0)),
+    box: {
+      x: clamp(item.box?.x), y: clamp(item.box?.y),
+      width: clamp(item.box?.width), height: clamp(item.box?.height),
+    },
+  };
+}
+
 function normalize(result) {
   const detections = Array.isArray(result.detections) ? result.detections.slice(0, 12) : [];
   return {
@@ -31,16 +56,7 @@ function normalize(result) {
     score: clamp(result.score),
     summary: String(result.summary || "分析完成，请人工复核。").slice(0, 500),
     foods: Array.isArray(result.foods) ? result.foods.map(String).slice(0, 30) : [],
-    detections: detections.map((item) => ({
-      category: item.category === "foreign_object" ? "foreign_object" : "allergen",
-      label: String(item.label || "待确认风险").slice(0, 80),
-      description: String(item.description || "请人工复核").slice(0, 300),
-      confidence: Math.min(1, Math.max(0, Number(item.confidence) || 0)),
-      box: {
-        x: clamp(item.box?.x), y: clamp(item.box?.y),
-        width: clamp(item.box?.width), height: clamp(item.box?.height),
-      },
-    })),
+    detections: detections.map(normalizeDetection),
   };
 }
 
@@ -80,6 +96,7 @@ export async function POST(request) {
                     ? `扩展说明：${allergenContext.matched.map((item) => `${item.input}→${item.note}`).join("；")}`
                     : "没有匹配到内置扩展词库时，请只按用户原始输入检查。",
                   "请优先标出与登记过敏原或扩展词相关的可见风险；对隐藏成分只给风险提示，不要把不确定内容说成确定。",
+                  "请用常识复核结果：若透明/反光物位于米饭、热菜、汤菜中，不要标为冰块；应作为疑似透明异物处理，并提醒人工确认是否为玻璃、塑料或其他异物。",
                 ].join("\n"),
               },
               { type: "image_url", image_url: { url: image } },
