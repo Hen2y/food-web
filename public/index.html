@@ -1335,6 +1335,7 @@ const autoState = {
   stableSince: 0,
   clearSince: 0,
   waitNextSince: 0,
+  projectionWaitSince: 0,
   busy: false,
   lastPresenceScore: 0,
   lastCaptureSignature: null,
@@ -1568,8 +1569,7 @@ function stopAutoMode(){
 function confirmAutoRisk(){
   if(!autoState.enabled) return;
   document.getElementById("autoConfirmBtn").style.display = "none";
-  restoreAutoLiveView();
-  beginWaitingNextPlate("已人工确认。请换上下一份餐盘，画面变化后会自动继续。");
+  waitForProjectionCloseBeforeNext("已人工确认。请关闭顾客屏幕，关闭后再识别下一盘。");
 }
 
 function updateAutoStatus(kind, message){
@@ -1605,6 +1605,19 @@ function beginWaitingNextPlate(message){
   autoState.waitNextSince = Date.now();
   autoState.busy = false;
   updateAutoStatus("waitingClear", message || "等待下一份餐盘；换盘后会自动继续识别。");
+}
+
+function isCustomerProjectionOpen(){
+  return Boolean(customerProjectionWindow && !customerProjectionWindow.closed);
+}
+
+function waitForProjectionCloseBeforeNext(message){
+  autoState.phase = "waitingProjectionClose";
+  autoState.stableSince = 0;
+  autoState.clearSince = 0;
+  autoState.projectionWaitSince = Date.now();
+  autoState.busy = false;
+  updateAutoStatus("waitingClear", message || "结果已投影。请关闭顾客屏幕后再进入下一盘识别。");
 }
 
 function getAutoFrameMetrics(){
@@ -1677,6 +1690,13 @@ async function monitorAutoFrame(){
       autoState.stableSince = 0;
       updateAutoStatus("waitingPlate", "等待餐盘进入画面");
     }
+  }else if(autoState.phase === "waitingProjectionClose"){
+    if(isCustomerProjectionOpen()){
+      updateAutoStatus("waitingClear", "结果正在顾客屏幕展示。关闭顾客屏幕后，系统再识别下一盘。");
+    }else{
+      restoreAutoLiveView();
+      beginWaitingNextPlate("顾客屏幕已关闭。请换上下一份餐盘，系统会自动继续。");
+    }
   }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
     const waited = now - (autoState.waitNextSince || now);
     const changed = frameSignatureDistance(signature, autoState.lastCaptureSignature);
@@ -1741,11 +1761,15 @@ async function captureAndAnalyzeAuto(){
   projectCurrentResultToCustomer();
   if(state.score < autoState.threshold){
     autoState.phase = "showingLow";
-    updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${Math.round(autoState.resultMs/1000)} 秒后等待下一盘`);
+    updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，结果会先投影到顾客屏幕`);
     setTimeout(()=>{
       if(!autoState.enabled) return;
-      restoreAutoLiveView();
-      beginWaitingNextPlate("本盘已自动通过。请直接换上下一份餐盘，系统会自动继续。");
+      if(isCustomerProjectionOpen()){
+        waitForProjectionCloseBeforeNext("本盘已自动通过。请关闭顾客屏幕，关闭后再识别下一盘。");
+      }else{
+        restoreAutoLiveView();
+        beginWaitingNextPlate("本盘已自动通过。请直接换上下一份餐盘，系统会自动继续。");
+      }
     }, autoState.resultMs);
   }else{
     autoState.phase = "needsConfirm";
