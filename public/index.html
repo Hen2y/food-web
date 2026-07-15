@@ -1627,7 +1627,13 @@ function isCustomerProjectionOpen(){
 }
 
 function isCurrentProjectionAcknowledged(){
-  return Boolean(state.presentationToken && localStorage.getItem("safeplate_customer_ack_token") === state.presentationToken);
+  const ackToken = localStorage.getItem("safeplate_customer_ack_token");
+  const readyAt = Number(localStorage.getItem("safeplate_customer_ready_next_at") || 0);
+  const waitedSince = autoState.projectionWaitSince || 0;
+  return Boolean(
+    (state.presentationToken && ackToken === state.presentationToken) ||
+    (readyAt && waitedSince && readyAt >= waitedSince)
+  );
 }
 
 function waitForProjectionCloseBeforeNext(message){
@@ -2145,6 +2151,7 @@ function ensureCustomerProjection(options = {}){
 function projectCurrentResultToCustomer(){
   state.presentationToken = `projection_${Date.now()}`;
   localStorage.removeItem("safeplate_customer_ack_token");
+  localStorage.removeItem("safeplate_customer_ready_next_at");
   syncState();
   if(customerProjectionWindow && !customerProjectionWindow.closed){
     try{
@@ -2169,6 +2176,7 @@ function continueAutoAfterCustomerAck(){
 
 function handleCustomerReadyNext(token = ""){
   if(token) localStorage.setItem("safeplate_customer_ack_token", token);
+  localStorage.setItem("safeplate_customer_ready_next_at", String(Date.now()));
   continueAutoAfterCustomerAck();
 }
 
@@ -2176,9 +2184,11 @@ function customerContinueNext(){
   const data = getSyncedState();
   const token = data.presentationToken || "";
   if(token) localStorage.setItem("safeplate_customer_ack_token", token);
+  localStorage.setItem("safeplate_customer_ready_next_at", String(Date.now()));
   if(window.opener && !window.opener.closed){
     try{ window.opener.postMessage({type:"safeplate:customerReadyNext", token}, location.origin); }catch(e){}
   }
+  showToast("已关闭本次结果，等待下一盘");
   updateCustomerScreen();
 }
 
@@ -2199,7 +2209,10 @@ function updateCustomerScreen(){
   const status = document.getElementById("customerStatus");
   const summary = document.getElementById("customerSummary");
   const list = document.getElementById("customerAlertList");
-  const acknowledged = Boolean(data.presentationToken && localStorage.getItem("safeplate_customer_ack_token") === data.presentationToken);
+  const acknowledged = Boolean(
+    (data.presentationToken && localStorage.getItem("safeplate_customer_ack_token") === data.presentationToken) ||
+    (data.analyzed && Number(localStorage.getItem("safeplate_customer_ready_next_at") || 0))
+  );
 
   if(acknowledged){
     image.style.display = "none";
@@ -2284,6 +2297,9 @@ function showToast(msg){
 window.addEventListener("storage", event=>{
   updateCustomerScreen();
   if(event.key === "safeplate_customer_ack_token"){
+    continueAutoAfterCustomerAck();
+  }
+  if(event.key === "safeplate_customer_ready_next_at"){
     continueAutoAfterCustomerAck();
   }
 });
