@@ -241,6 +241,12 @@
       box-shadow:var(--soft-shadow);
       backdrop-filter:blur(16px);
       overflow:hidden;
+      transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+    }
+    .card:hover{
+      transform:translateY(-2px);
+      box-shadow:0 18px 42px rgba(18,38,63,.10);
+      border-color:rgba(47,120,214,.18);
     }
     .card-pad{padding:20px}
     .card-header{
@@ -291,6 +297,115 @@
     .metric.blue .icon{background:var(--blue-2);color:var(--blue)}
     .metric.amber .icon{background:var(--amber-2);color:var(--amber)}
 
+    .hero-panel{
+      position:relative;
+      overflow:hidden;
+      margin-bottom:18px;
+      padding:24px;
+      min-height:178px;
+      background:
+        radial-gradient(circle at 78% 24%, rgba(255,255,255,.72), transparent 0 11%, transparent 12%),
+        radial-gradient(circle at 88% 48%, rgba(255,255,255,.40), transparent 0 8%, transparent 9%),
+        linear-gradient(135deg,#0f8f6d,#2f78d6);
+      color:#fff;
+    }
+    .hero-panel:before{
+      content:"";
+      position:absolute;
+      inset:auto -70px -95px auto;
+      width:250px;
+      height:250px;
+      border-radius:50%;
+      background:rgba(255,255,255,.16);
+    }
+    .hero-panel:after{
+      content:"";
+      position:absolute;
+      left:56%;
+      top:22px;
+      width:150px;
+      height:150px;
+      border-radius:46px;
+      border:1px solid rgba(255,255,255,.20);
+      transform:rotate(12deg);
+    }
+    .hero-content{
+      position:relative;
+      z-index:1;
+      max-width:720px;
+    }
+    .hero-kicker{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 11px;
+      border-radius:999px;
+      background:rgba(255,255,255,.16);
+      border:1px solid rgba(255,255,255,.22);
+      font-size:12px;
+      font-weight:850;
+      margin-bottom:14px;
+    }
+    .hero-panel h3{
+      margin:0 0 10px;
+      font-size:30px;
+      letter-spacing:-.045em;
+      line-height:1.12;
+    }
+    .hero-panel p{
+      margin:0;
+      color:rgba(255,255,255,.86);
+      line-height:1.75;
+      font-size:14px;
+    }
+    .hero-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:18px;
+    }
+    .hero-actions .btn-hero{
+      background:#fff;
+      color:#0d7258;
+      box-shadow:0 14px 32px rgba(0,0,0,.16);
+    }
+    .hero-actions .btn-hero-ghost{
+      color:#fff;
+      background:rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.26);
+    }
+
+    .step-strip{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:12px;
+      margin-bottom:18px;
+    }
+    .step-card{
+      display:flex;
+      gap:12px;
+      align-items:flex-start;
+      padding:14px;
+      border-radius:18px;
+      border:1px solid rgba(229,237,243,.95);
+      background:rgba(255,255,255,.82);
+      box-shadow:0 10px 26px rgba(18,38,63,.05);
+    }
+    .step-index{
+      width:30px;
+      height:30px;
+      border-radius:12px;
+      display:grid;
+      place-items:center;
+      flex:0 0 auto;
+      color:#fff;
+      background:linear-gradient(135deg,var(--green),#55d2aa);
+      font-size:13px;
+      font-weight:950;
+    }
+    .step-card strong{display:block;font-size:13px;margin-bottom:4px}
+    .step-card span{display:block;color:var(--muted);font-size:12px;line-height:1.55}
+
     /* Detection workspace */
     .workspace{
       display:grid;
@@ -311,6 +426,12 @@
       display:grid;
       place-items:center;
       cursor:pointer;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.65);
+      transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    }
+    .upload-zone:hover{
+      border-color:rgba(21,167,121,.55);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.7), 0 14px 34px rgba(21,167,121,.08);
     }
     .upload-zone.has-image{border-style:solid;background:#101827}
     .upload-placeholder{
@@ -387,7 +508,9 @@
       border:1px solid var(--line);
       border-radius:18px;
       padding:14px;
-      background:linear-gradient(180deg,#fff,#f7fbfd);
+      background:
+        radial-gradient(circle at 92% 12%, rgba(47,120,214,.10), transparent 25%),
+        linear-gradient(180deg,#fff,#f7fbfd);
     }
     .auto-panel .mini{
       color:var(--muted);
@@ -408,6 +531,50 @@
     .auto-status.warn{background:var(--amber-2);color:#8a5600}
     .auto-status.danger{background:var(--red-2);color:var(--red)}
     .auto-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .mode-title{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .mode-title h3{
+      margin:0;
+      font-size:16px;
+      letter-spacing:-.02em;
+    }
+    .mode-tag{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 9px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:900;
+      color:#0c7558;
+      background:var(--green-2);
+    }
+    .mode-tips{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:8px;
+      margin:12px 0 2px;
+    }
+    .mode-tip{
+      padding:10px;
+      border-radius:14px;
+      background:#fff;
+      border:1px solid rgba(229,237,243,.95);
+      color:#536070;
+      font-size:11px;
+      line-height:1.45;
+    }
+    .mode-tip strong{
+      display:block;
+      color:#253245;
+      font-size:12px;
+      margin-bottom:3px;
+    }
     .scan-frame{
       display:none;
       position:absolute;
@@ -572,6 +739,12 @@
       background:#fbfdfe;
     }
     tr:last-child td{border-bottom:0}
+    tbody tr{
+      transition:background .18s ease;
+    }
+    tbody tr:hover{
+      background:#f8fbfd;
+    }
     .status-pill{
       display:inline-flex;align-items:center;gap:6px;
       padding:6px 9px;border-radius:999px;
@@ -825,6 +998,11 @@
       background:#f4f7fb;
       cursor:pointer;
       box-shadow:0 8px 18px rgba(30,58,90,.08);
+      transition:transform .18s ease, box-shadow .18s ease;
+    }
+    .record-thumb-btn:hover{
+      transform:scale(1.04);
+      box-shadow:0 12px 24px rgba(30,58,90,.14);
     }
     .record-thumb-btn img{
       width:100%;
@@ -908,6 +1086,7 @@
       .topbar{height:auto;align-items:flex-start;flex-direction:column;margin-bottom:14px}
       .top-actions{width:100%;overflow-x:auto}
       .grid-three,.grid-two,.customer-body{grid-template-columns:1fr}
+      .step-strip,.mode-tips{grid-template-columns:1fr}
       .workspace{display:block}
       .analysis-panel{margin-top:16px}
       .upload-zone{min-height:320px}
@@ -991,6 +1170,18 @@
       <section class="content">
         <!-- Dashboard -->
         <div class="page active" id="page-dashboard">
+          <div class="card hero-panel">
+            <div class="hero-content">
+              <div class="hero-kicker"><span class="dot" style="background:#fff;box-shadow:0 0 0 5px rgba(255,255,255,.16)"></span> 校園食堂 AI 安全檢測</div>
+              <h3>讓每一份餐盤，在送到學生面前前先完成一次安全檢查。</h3>
+              <p>盤安 SafePlate 會把餐盤圖片、學生過敏原檔案與 AI 風險判斷整合到同一個工作台，協助食堂更快發現疑似異物、過敏原命中與需要人工覆核的情況。</p>
+              <div class="hero-actions">
+                <button class="btn btn-hero" onclick="switchPage('scan')">立即開始檢測</button>
+                <button class="btn btn-hero-ghost" onclick="switchPage('records')">查看歷史記錄</button>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-three" style="margin-bottom:18px;">
             <div class="card metric">
               <div class="icon">✓</div>
@@ -1066,6 +1257,20 @@
 
         <!-- Scan -->
         <div class="page" id="page-scan">
+          <div class="step-strip">
+            <div class="step-card">
+              <div class="step-index">1</div>
+              <div><strong>放入餐盤</strong><span>上傳照片或開啟自動模式，讓餐盤位於畫面中央。</span></div>
+            </div>
+            <div class="step-card">
+              <div class="step-index">2</div>
+              <div><strong>AI 讀取</strong><span>系統同步判斷異物、食材、過敏原與風險分數。</span></div>
+            </div>
+            <div class="step-card">
+              <div class="step-index">3</div>
+              <div><strong>人工覆核</strong><span>高風險結果停下確認，低風險可快速進入下一盤。</span></div>
+            </div>
+          </div>
           <div class="workspace">
             <div class="card card-pad">
               <div class="upload-zone" id="uploadZone" onclick="handleUploadZoneClick()">
@@ -1102,6 +1307,10 @@
             <div class="analysis-panel">
               <div class="card card-pad">
                 <div class="auto-panel">
+                  <div class="mode-title">
+                    <h3>自动检测模式</h3>
+                    <span class="mode-tag">常驻摄像头</span>
+                  </div>
                   <div class="select-row">
                     <div class="field">
                       <label>自动模式风险阈值</label>
@@ -1113,6 +1322,11 @@
                     </div>
                   </div>
                   <p class="mini">打开自动模式后会常驻摄像头；画面检测到餐盘/饭菜稳定数秒后自动拍照识别。AI 风险分数低于阈值会自动继续，高于或等于阈值需要人工确认。</p>
+                  <div class="mode-tips">
+                    <div class="mode-tip"><strong>餐盘居中</strong>减少空画面误拍</div>
+                    <div class="mode-tip"><strong>稳定等待</strong>默认等待 4 秒再拍</div>
+                    <div class="mode-tip"><strong>高风险暂停</strong>需要人工确认后继续</div>
+                  </div>
                   <div class="auto-actions">
                     <button class="btn btn-primary" id="autoStartBtn" onclick="startAutoMode()">开启自动模式</button>
                     <button class="btn btn-ghost" id="autoStopBtn" onclick="stopAutoMode()" disabled>关闭自动模式</button>
