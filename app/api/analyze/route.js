@@ -63,6 +63,20 @@ function normalize(result) {
   };
 }
 
+function getProviderErrorMessage(payload, status) {
+  const raw = String(payload?.error?.message || payload?.message || "");
+  if (/quota|exceeded|insufficient|余额|额度|用量|欠费/i.test(raw)) {
+    return "Kimi API 额度已用完或余额不足。请到 Kimi 控制台充值、提高额度，或更换新的 MOONSHOT_API_KEY。";
+  }
+  if (/rate.?limit|too many requests|429|频率|限流/i.test(raw) || status === 429) {
+    return "Kimi API 请求过于频繁，已被限流。请稍等一会儿再试，或降低自动模式检测频率。";
+  }
+  if (/auth|api.?key|unauthorized|invalid/i.test(raw) || status === 401 || status === 403) {
+    return "Kimi API Key 无效或没有权限。请检查 Render 环境变量 MOONSHOT_API_KEY 是否正确。";
+  }
+  return raw || `Kimi API 请求失败（${status}）`;
+}
+
 export async function POST(request) {
   try {
     if (!process.env.MOONSHOT_API_KEY) {
@@ -84,7 +98,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model: process.env.MOONSHOT_MODEL || "kimi-k2.6",
         thinking: { type: "disabled" },
-        max_tokens: 1600,
+        max_tokens: 900,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -114,7 +128,7 @@ export async function POST(request) {
 
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      return NextResponse.json({ error: payload.error?.message || `Kimi API 请求失败（${response.status}）` }, { status: 502 });
+      return NextResponse.json({ error: getProviderErrorMessage(payload, response.status) }, { status: 502 });
     }
     const content = payload.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw new Error("Kimi API 没有返回分析内容");
