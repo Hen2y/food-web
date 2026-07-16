@@ -593,6 +593,63 @@
     .scan-frame:before{left:-2px;top:-2px;border-width:4px 0 0 4px;border-radius:14px 0 0 0}
     .scan-frame:after{right:-2px;bottom:-2px;border-width:0 4px 4px 0;border-radius:0 0 14px 0}
     .upload-zone.has-image .scan-frame{display:block}
+    .image-editor{
+      display:none;
+      margin-top:14px;
+      padding:14px;
+      border:1px solid var(--line);
+      border-radius:18px;
+      background:linear-gradient(180deg,#fff,#f7fbfd);
+    }
+    .image-editor.show{display:block}
+    .editor-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .editor-head strong{font-size:14px}
+    .editor-head span{font-size:12px;color:var(--muted)}
+    .editor-tools{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:10px;
+      align-items:center;
+    }
+    .editor-buttons{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .editor-buttons .btn{
+      padding:9px 11px;
+      border-radius:12px;
+      font-size:12px;
+    }
+    .zoom-control{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:190px;
+    }
+    .zoom-control label{
+      font-size:12px;
+      font-weight:850;
+      color:#556273;
+      white-space:nowrap;
+    }
+    .zoom-control input{
+      width:100%;
+      accent-color:var(--green);
+    }
+    .zoom-value{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:850;
+      min-width:44px;
+      text-align:right;
+    }
     .bbox{
       display:none;
       position:absolute;
@@ -1087,6 +1144,8 @@
       .top-actions{width:100%;overflow-x:auto}
       .grid-three,.grid-two,.customer-body{grid-template-columns:1fr}
       .step-strip,.mode-tips{grid-template-columns:1fr}
+      .editor-tools{grid-template-columns:1fr}
+      .zoom-control{min-width:0}
       .workspace{display:block}
       .analysis-panel{margin-top:16px}
       .upload-zone{min-height:320px}
@@ -1292,6 +1351,29 @@
                     <div><strong id="autoHudTitle">自动模式待命</strong><span id="autoHudText">等待餐盘进入画面</span></div>
                   </div>
                   <span id="autoPresenceText">画面检测 0%</span>
+                </div>
+              </div>
+              <div class="image-editor" id="imageEditor">
+                <div class="editor-head">
+                  <div>
+                    <strong>手动图片调整</strong>
+                    <span>旋转或缩放后再提交 AI，适合照片横竖不正、餐盘太小的情况。</span>
+                  </div>
+                  <span id="imageEditStatus">原图</span>
+                </div>
+                <div class="editor-tools">
+                  <div class="editor-buttons">
+                    <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); rotateManualImage(-90);">向左旋转</button>
+                    <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); rotateManualImage(90);">向右旋转</button>
+                  </div>
+                  <div class="zoom-control">
+                    <label for="imageZoom">图片大小</label>
+                    <input id="imageZoom" type="range" min="70" max="160" value="100" step="5" oninput="setManualImageZoom(this.value)" />
+                    <span class="zoom-value" id="imageZoomValue">100%</span>
+                  </div>
+                  <div class="editor-buttons">
+                    <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); resetManualImageEdit();">重置图片</button>
+                  </div>
                 </div>
               </div>
               <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
@@ -1532,6 +1614,12 @@ const state = {
 };
 let recordImageStore = [];
 let customerProjectionWindow = null;
+const manualImageEditor = {
+  source: "",
+  rotation: 0,
+  zoom: 1,
+  renderTimer: null
+};
 
 const autoState = {
   enabled: false,
@@ -1588,7 +1676,9 @@ document.getElementById("photoInput").addEventListener("change", async function(
   if(!file) return;
   try{
     showToast("正在优化餐盘图片...");
-    state.image = await compressImage(file);
+    const compressed = await compressImage(file);
+    resetManualImageEditor(compressed, true);
+    state.image = compressed;
     state.analyzed = false;
     setPreview(state.image);
     syncState();
@@ -1645,6 +1735,114 @@ function createHistoryImage(src){
   });
 }
 
+function resetManualImageEditor(src = "", visible = false){
+  manualImageEditor.source = src;
+  manualImageEditor.rotation = 0;
+  manualImageEditor.zoom = 1;
+  const zoom = document.getElementById("imageZoom");
+  if(zoom) zoom.value = "100";
+  updateManualImageEditorUI();
+  setManualImageEditorVisible(Boolean(visible && src && !autoState.enabled));
+}
+
+function setManualImageEditorVisible(show){
+  const panel = document.getElementById("imageEditor");
+  if(panel) panel.classList.toggle("show", Boolean(show));
+}
+
+function updateManualImageEditorUI(){
+  const zoomValue = document.getElementById("imageZoomValue");
+  const status = document.getElementById("imageEditStatus");
+  if(zoomValue) zoomValue.textContent = `${Math.round(manualImageEditor.zoom * 100)}%`;
+  if(status){
+    const rotation = ((manualImageEditor.rotation % 360) + 360) % 360;
+    const parts = [];
+    if(rotation) parts.push(`旋转 ${rotation}°`);
+    if(Math.abs(manualImageEditor.zoom - 1) > .01) parts.push(`大小 ${Math.round(manualImageEditor.zoom * 100)}%`);
+    status.textContent = parts.length ? parts.join("｜") : "原图";
+  }
+}
+
+function renderEditedManualImage(){
+  return new Promise((resolve,reject)=>{
+    if(!manualImageEditor.source) return resolve("");
+    const image = new Image();
+    image.onerror = ()=>reject(new Error("图片调整失败，请重新上传"));
+    image.onload = ()=>{
+      const rotation = ((manualImageEditor.rotation % 360) + 360) % 360;
+      const quarterTurn = rotation === 90 || rotation === 270;
+      const rotatedWidth = quarterTurn ? image.height : image.width;
+      const rotatedHeight = quarterTurn ? image.width : image.height;
+      const maxSide = 1100;
+      const fitScale = Math.min(1, maxSide / Math.max(rotatedWidth, rotatedHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(rotatedWidth * fitScale));
+      canvas.height = Math.max(1, Math.round(rotatedHeight * fitScale));
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.translate(canvas.width / 2, canvas.height / 2);
+      context.rotate(rotation * Math.PI / 180);
+      const drawScale = fitScale * manualImageEditor.zoom;
+      context.drawImage(
+        image,
+        -image.width * drawScale / 2,
+        -image.height * drawScale / 2,
+        image.width * drawScale,
+        image.height * drawScale
+      );
+      resolve(canvas.toDataURL("image/jpeg", .74));
+    };
+    image.src = manualImageEditor.source;
+  });
+}
+
+async function applyManualImageEdit(){
+  if(!manualImageEditor.source) return;
+  try{
+    const edited = await renderEditedManualImage();
+    if(!edited) return;
+    state.image = edited;
+    state.analyzed = false;
+    document.getElementById("uploadZone").classList.remove("analyzed");
+    document.getElementById("bboxLayer").innerHTML = "";
+    setPreview(edited);
+    updateManualImageEditorUI();
+    syncState();
+  }catch(error){
+    showToast(error.message || "图片调整失败");
+  }
+}
+
+function scheduleManualImageEdit(){
+  clearTimeout(manualImageEditor.renderTimer);
+  manualImageEditor.renderTimer = setTimeout(applyManualImageEdit, 80);
+}
+
+function rotateManualImage(degrees){
+  if(!manualImageEditor.source) return showToast("请先上传餐盘图片");
+  manualImageEditor.rotation += degrees;
+  updateManualImageEditorUI();
+  scheduleManualImageEdit();
+}
+
+function setManualImageZoom(value){
+  if(!manualImageEditor.source) return;
+  manualImageEditor.zoom = Math.min(1.6, Math.max(.7, Number(value) / 100 || 1));
+  updateManualImageEditorUI();
+  scheduleManualImageEdit();
+}
+
+function resetManualImageEdit(){
+  if(!manualImageEditor.source) return;
+  manualImageEditor.rotation = 0;
+  manualImageEditor.zoom = 1;
+  const zoom = document.getElementById("imageZoom");
+  if(zoom) zoom.value = "100";
+  updateManualImageEditorUI();
+  scheduleManualImageEdit();
+}
+
 function setPreview(src){
   const zone = document.getElementById("uploadZone");
   const img = document.getElementById("previewImage");
@@ -1656,6 +1854,7 @@ function setPreview(src){
 }
 
 function prepareAutoProjectionWaiting(){
+  resetManualImageEditor("", false);
   state.image = "";
   state.analyzed = false;
   state.risk = "low";
@@ -1957,6 +2156,7 @@ async function captureAndAnalyzeAuto(){
   autoState.phase = "capturing";
   updateAutoStatus("capturing", "已自动拍照，AI 正在识别风险");
   autoState.lastCaptureSignature = autoState.currentSignature ? [...autoState.currentSignature] : null;
+  resetManualImageEditor("", false);
   state.image = captureAutoImage();
   setPreview(state.image);
   document.getElementById("uploadZone").classList.add("auto-live", "auto-review");
@@ -2388,6 +2588,7 @@ function loadSample(){
       <text x="600" y="735" font-family="Arial" font-size="30" fill="#5a6878" font-weight="700">SafePlate Demo Meal Tray</text>
     </svg>`;
   state.image = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+  resetManualImageEditor(state.image, true);
   state.analyzed = false;
   setPreview(state.image);
   syncState();
@@ -2424,6 +2625,7 @@ async function initMode(){
   const synced = getSyncedState();
   Object.assign(state, synced, {dataVersion: 3});
   if(state.image){
+    resetManualImageEditor(state.image, !state.analyzed);
     setPreview(state.image);
     if(state.analyzed){
       document.getElementById("uploadZone").classList.add("analyzed");
