@@ -2831,21 +2831,84 @@ function getSelectedProfile(){
   return state.profiles.find(p=>p.id===document.getElementById("customerSelect").value) || null;
 }
 
-function saveProfile(){
+async function loadDatabaseProfiles(options = {}){
+  try{
+    const response = await fetch("/api/profiles", {cache:"no-store"});
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || "读取过敏原档案失败");
+    if(data.configured && Array.isArray(data.profiles)){
+      if(data.profiles.length){
+        state.profiles = data.profiles;
+        renderProfiles();
+        syncState();
+      }else if(state.profiles.length && !options.skipSeed){
+        await saveProfilesToDatabase(state.profiles, {silent:true});
+      }
+      return true;
+    }
+  }catch(error){
+    if(!options.silent) showToast(error.message || "数据库档案读取失败，已使用本地档案");
+  }
+  return false;
+}
+
+async function saveProfileToDatabase(profile, options = {}){
+  return saveProfilesToDatabase([profile], options);
+}
+
+async function saveProfilesToDatabase(profiles, options = {}){
+  try{
+    const response = await fetch("/api/profiles", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({profiles})
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || "保存过敏原档案失败");
+    return Boolean(data.configured && data.saved);
+  }catch(error){
+    if(!options.silent) showToast(error.message || "数据库保存失败，已保存在本机");
+    return false;
+  }
+}
+
+async function deleteProfileFromDatabase(id, options = {}){
+  try{
+    const response = await fetch("/api/profiles", {
+      method:"DELETE",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({id})
+    });
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data.error || "删除数据库档案失败");
+    return Boolean(data.configured && data.deleted);
+  }catch(error){
+    if(!options.silent) showToast(error.message || "数据库删除失败，已先从本机移除");
+    return false;
+  }
+}
+
+async function saveProfile(){
   const name=document.getElementById("profileName").value.trim();
   const allergens=document.getElementById("profileAllergens").value.split(/[、,，]/).map(v=>v.trim()).filter(Boolean);
   const sensitivity=document.getElementById("profileSensitivity").value;
   if(!name){showToast("请填写姓名");return;}
+  let profile = null;
   if(editingProfileId){
-    const profile=state.profiles.find(p=>p.id===editingProfileId);
+    profile=state.profiles.find(p=>p.id===editingProfileId);
     if(profile) Object.assign(profile,{name,allergens,sensitivity});
   }else{
-    state.profiles.push({id:`p_${Date.now()}`,name,allergens,sensitivity});
+    profile = {id:`p_${Date.now()}`,name,allergens,sensitivity};
+    state.profiles.push(profile);
   }
   editingProfileId=null;
   document.getElementById("profileName").value="";
   document.getElementById("profileAllergens").value="";
   renderProfiles(); syncState(); showToast("过敏原档案已保存");
+  if(profile){
+    const saved = await saveProfileToDatabase(profile);
+    if(saved) showToast("过敏原档案已同步到数据库");
+  }
 }
 
 function editProfile(id){
@@ -2856,10 +2919,11 @@ function editProfile(id){
   document.getElementById("profileSensitivity").value=p.sensitivity;
 }
 
-function deleteProfile(id){
+async function deleteProfile(id){
   state.profiles=state.profiles.filter(p=>p.id!==id);
   if(editingProfileId===id) editingProfileId=null;
   renderProfiles(); syncState(); showToast("档案已删除");
+  await deleteProfileFromDatabase(id);
 }
 
 function cloneRecordForStorage(record){
@@ -3103,6 +3167,7 @@ async function initMode(){
   renderTables();
   renderDashboardResult();
   await loadDatabaseRecords({silent:true});
+  await loadDatabaseProfiles({silent:true});
   renderProfiles();
   syncState();
 }
