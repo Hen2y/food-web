@@ -1654,6 +1654,7 @@
                 <div class="bbox-layer" id="bboxLayer"></div>
                 <div class="manual-camera-actions" id="manualCameraActions">
                   <button class="btn btn-primary" type="button" onclick="event.stopPropagation(); captureManualCameraPhoto();">拍下这张</button>
+                  <button class="btn btn-blue" type="button" onclick="event.stopPropagation(); switchCamera();">切换摄像头</button>
                   <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); stopManualCamera();">取消拍照</button>
                 </div>
                 <div class="auto-banner" id="autoResultBanner">
@@ -1731,6 +1732,7 @@
                   <div class="auto-actions">
                     <button class="btn btn-primary" id="autoStartBtn" onclick="startAutoMode()">开启自动模式</button>
                     <button class="btn btn-ghost" id="autoStopBtn" onclick="stopAutoMode()" disabled>关闭自动模式</button>
+                    <button class="btn btn-ghost" id="cameraSwitchBtn" onclick="switchCamera()" disabled>切换摄像头</button>
                     <button class="btn btn-blue" id="autoConfirmBtn" onclick="confirmAutoRisk()" style="display:none;">人工确认，继续下一盘</button>
                   </div>
                   <div class="auto-status" id="autoStatus">自动模式未开启</div>
@@ -2025,6 +2027,11 @@ let activeAnalysisRequest = null;
 const manualCameraState = {
   stream: null,
   active: false
+};
+const cameraState = {
+  devices: [],
+  currentDeviceId: "",
+  preferredFacingMode: "environment"
 };
 const manualImageEditor = {
   source: "",
@@ -2707,13 +2714,34 @@ async function verifyCameraFrame(video){
   }
 }
 
-async function openAutoCameraStream(video){
+async function refreshCameraDevices(){
+  if(!navigator.mediaDevices?.enumerateDevices) return [];
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    cameraState.devices = devices.filter(device=>device.kind === "videoinput");
+    const currentIndex = cameraState.devices.findIndex(device=>device.deviceId === cameraState.currentDeviceId);
+    document.getElementById("cameraSwitchBtn").disabled = !(autoState.enabled && cameraState.devices.length > 1);
+    return cameraState.devices;
+  }catch(error){
+    return cameraState.devices || [];
+  }
+}
+
+function getActiveCameraLabel(){
+  const current = cameraState.devices.find(device=>device.deviceId === cameraState.currentDeviceId);
+  return current?.label || (cameraState.currentDeviceId ? "当前摄像头" : "");
+}
+
+async function openAutoCameraStream(video, deviceId = ""){
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  const deviceAttempt = deviceId ? [{video:{deviceId:{exact:deviceId},width:{ideal:1280},height:{ideal:720}},audio:false}] : [];
   const attempts = mobile ? [
+    ...deviceAttempt,
     {video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false},
     {video:{facingMode:{ideal:"user"},width:{ideal:960},height:{ideal:540}},audio:false},
     {video:true,audio:false}
   ] : [
+    ...deviceAttempt,
     {video:{width:{ideal:1280},height:{ideal:720}},audio:false},
     {video:true,audio:false}
   ];
@@ -2724,6 +2752,10 @@ async function openAutoCameraStream(video){
       stream = await navigator.mediaDevices.getUserMedia(constraints);
       await attachCameraStream(video, stream, {forceRebind:true});
       await verifyCameraFrame(video);
+      const track = stream.getVideoTracks()[0];
+      const settings = track?.getSettings?.() || {};
+      if(settings.deviceId) cameraState.currentDeviceId = settings.deviceId;
+      await refreshCameraDevices();
       return stream;
     }catch(error){
       lastError = error;
@@ -2733,6 +2765,51 @@ async function openAutoCameraStream(video){
     }
   }
   throw lastError || new Error("摄像头无法输出画面");
+}
+
+async function switchCamera(){
+  if(!navigator.mediaDevices?.getUserMedia) return showToast("当前浏览器不支持摄像头切换。");
+  const devices = await refreshCameraDevices();
+  if(devices.length <= 1){
+    showToast("没有检测到其它摄像头。");
+    return;
+  }
+  const currentIndex = Math.max(0, devices.findIndex(device=>device.deviceId === cameraState.currentDeviceId));
+  const nextDevice = devices[(currentIndex + 1) % devices.length];
+  const video = document.getElementById("autoVideo");
+  const wasManual = manualCameraState.active;
+  const wasAuto = autoState.enabled;
+  const previousStream = wasManual ? manualCameraState.stream : wasAuto ? autoState.stream : null;
+  if(!wasManual && !wasAuto){
+    showToast("请先打开拍照识别或自动模式。");
+    return;
+  }
+  try{
+    const nextStream = await openAutoCameraStream(video, nextDevice.deviceId);
+    if(wasManual){
+      if(manualCameraState.stream) manualCameraState.stream.getTracks().forEach(track=>track.stop());
+      manualCameraState.stream = nextStream;
+      manualCameraState.active = true;
+      document.getElementById("uploadZone").classList.add("manual-camera-live");
+    }
+    if(wasAuto){
+      if(autoState.stream) autoState.stream.getTracks().forEach(track=>track.stop());
+      autoState.stream = nextStream;
+      autoState.stableSince = 0;
+      autoState.clearSince = 0;
+      autoState.lastCaptureSignature = null;
+      autoState.currentSignature = null;
+      document.getElementById("uploadZone").classList.add("auto-live");
+      updateAutoStatus("waitingPlate", "已切换摄像头，等待餐盘进入画面");
+    }
+    await refreshCameraDevices();
+    showToast(`已切换摄像头${getActiveCameraLabel() ? "：" + getActiveCameraLabel() : ""}`);
+  }catch(error){
+    if(previousStream){
+      try{ await attachCameraStream(video, previousStream, {forceRebind:true}); }catch(_error){}
+    }
+    showToast(getCameraErrorMessage(error) || "摄像头切换失败");
+  }
 }
 
 function clearAutoReviewOverlay(){
@@ -2792,6 +2869,7 @@ async function startAutoMode(){
     document.getElementById("autoConfirmBtn").style.display = "none";
     showAutoBanner("safe", "自动模式已开启", `风险阈值 ${threshold}｜额度保护已开启｜等待餐盘进入画面`, "");
     updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，额度保护已开启，等待餐盘进入画面`);
+    refreshCameraDevices();
     autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
   }catch(error){
     if(stream) stream.getTracks().forEach(track=>track.stop());
@@ -2807,6 +2885,7 @@ async function startAutoMode(){
     document.getElementById("uploadZone").classList.remove("auto-live", "auto-review");
     document.getElementById("autoStartBtn").disabled = false;
     document.getElementById("autoStopBtn").disabled = true;
+    document.getElementById("cameraSwitchBtn").disabled = true;
     const cameraMessage = getCameraErrorMessage(error);
     showToast(cameraMessage);
     updateAutoStatus("danger", cameraMessage);
@@ -2836,6 +2915,7 @@ function stopAutoMode(){
   document.getElementById("uploadZone").classList.remove("auto-live", "auto-review");
   document.getElementById("autoStartBtn").disabled = false;
   document.getElementById("autoStopBtn").disabled = true;
+  document.getElementById("cameraSwitchBtn").disabled = true;
   document.getElementById("autoConfirmBtn").style.display = "none";
   hideAutoBanner();
   setCustomerProjectionDisabled(false);
