@@ -524,6 +524,32 @@
       padding:12px 14px;
       box-shadow:0 12px 26px rgba(0,0,0,.18);
     }
+    .manual-camera-actions{
+      display:none;
+      position:absolute;
+      left:18px;
+      right:18px;
+      bottom:18px;
+      z-index:7;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding:12px;
+      border-radius:14px;
+      background:rgba(9,14,22,.72);
+      border:1px solid rgba(255,255,255,.16);
+      backdrop-filter:blur(14px);
+      box-shadow:0 18px 42px rgba(0,0,0,.30);
+    }
+    .upload-zone.manual-camera-live{
+      border-style:solid;
+      background:#101827;
+      cursor:default;
+    }
+    .upload-zone.manual-camera-live #autoVideo{display:block}
+    .upload-zone.manual-camera-live .upload-placeholder{display:none}
+    .upload-zone.manual-camera-live .scan-frame{display:block}
+    .upload-zone.manual-camera-live .manual-camera-actions{display:flex}
     #previewImage{
       display:none;
       width:100%;
@@ -1624,6 +1650,10 @@
                 <img id="previewImage" alt="餐盤照片預覽" />
                 <div class="scan-frame"></div>
                 <div class="bbox-layer" id="bboxLayer"></div>
+                <div class="manual-camera-actions" id="manualCameraActions">
+                  <button class="btn btn-primary" type="button" onclick="event.stopPropagation(); captureManualCameraPhoto();">拍下这张</button>
+                  <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); stopManualCamera();">取消拍照</button>
+                </div>
                 <div class="auto-banner" id="autoResultBanner">
                   <div>
                     <strong id="autoBannerTitle">自动模式提示</strong>
@@ -1989,6 +2019,10 @@ let recordImageStore = [];
 let customerProjectionWindow = null;
 let analysisRequestSeq = 0;
 let activeAnalysisRequest = null;
+const manualCameraState = {
+  stream: null,
+  active: false
+};
 const manualImageEditor = {
   source: "",
   rotation: 0,
@@ -2154,19 +2188,72 @@ async function handleManualImageSelected(e){
 document.getElementById("cameraInput").addEventListener("change", handleManualImageSelected);
 document.getElementById("fileInput").addEventListener("change", handleManualImageSelected);
 
-function openCameraPicker(){
+async function openCameraPicker(){
   if(autoState.enabled) return;
-  document.getElementById("cameraInput").click();
+  if(!navigator.mediaDevices?.getUserMedia){
+    showToast("当前浏览器不支持网页拍照，请使用上传图片。");
+    document.getElementById("cameraInput").click();
+    return;
+  }
+  try{
+    stopManualCamera();
+    const video = document.getElementById("autoVideo");
+    const zone = document.getElementById("uploadZone");
+    zone.classList.remove("has-image", "analyzed", "auto-review");
+    document.getElementById("previewImage").style.display = "none";
+    document.getElementById("bboxLayer").innerHTML = "";
+    manualCameraState.stream = await openAutoCameraStream(video);
+    manualCameraState.active = true;
+    zone.classList.add("manual-camera-live");
+    showToast("相机已打开，请对准餐盘后点击“拍下这张”");
+  }catch(error){
+    stopManualCamera();
+    const cameraMessage = getCameraErrorMessage(error);
+    showToast(cameraMessage || "摄像头无法打开，请改用上传图片。");
+    document.getElementById("cameraInput").click();
+  }
 }
 
 function openFilePicker(){
   if(autoState.enabled) return;
+  stopManualCamera();
   document.getElementById("fileInput").click();
 }
 
 function handleUploadZoneClick(){
-  if(autoState.enabled) return;
+  if(autoState.enabled || manualCameraState.active) return;
   openFilePicker();
+}
+
+function stopManualCamera(){
+  if(manualCameraState.stream){
+    manualCameraState.stream.getTracks().forEach(track=>track.stop());
+  }
+  manualCameraState.stream = null;
+  manualCameraState.active = false;
+  const video = document.getElementById("autoVideo");
+  if(video){
+    video.pause();
+    video.srcObject = null;
+  }
+  const zone = document.getElementById("uploadZone");
+  if(zone) zone.classList.remove("manual-camera-live");
+}
+
+function captureManualCameraPhoto(){
+  if(!manualCameraState.active) return;
+  try{
+    const captured = captureAutoImage();
+    stopManualCamera();
+    resetManualImageEditor(captured, true);
+    state.image = captured;
+    state.analyzed = false;
+    setPreview(state.image);
+    syncState();
+    showToast("已拍照，确认后可提交 AI 读取");
+  }catch(error){
+    showToast("拍照失败，请重试或改用上传图片。");
+  }
 }
 
 function compressImage(file){
@@ -2610,7 +2697,7 @@ function clearAutoReviewOverlay(){
   state.image = "";
   state.analyzed = false;
   state.detections = [];
-  zone.classList.remove("has-image", "analyzed", "auto-review");
+  zone.classList.remove("has-image", "analyzed", "auto-review", "manual-camera-live");
   img.style.display = "none";
   img.src = "";
   img.removeAttribute("src");
@@ -2620,6 +2707,7 @@ function clearAutoReviewOverlay(){
 
 async function startAutoMode(){
   if(autoState.enabled) return;
+  stopManualCamera();
   const threshold = Number(document.getElementById("autoThreshold").value);
   const stableSeconds = Number(document.getElementById("autoStableSeconds").value);
   if(!Number.isFinite(threshold) || threshold < 0 || threshold > 100){
