@@ -20,6 +20,19 @@
       --amber-2:#fff5de;
       --red:#d94b4b;
       --red-2:#fff0f0;
+      --theme-ink:#14202b;
+      --theme-muted:#647386;
+      --theme-bg-a:#f7fafc;
+      --theme-bg-b:#edf4f7;
+      --theme-glow:40,111,209;
+      --theme-primary:#0fa878;
+      --theme-primary-soft:#e8f8f2;
+      --theme-secondary:#286fd1;
+      --theme-secondary-soft:#eaf2ff;
+      --theme-border:214,226,235;
+      --theme-shadow:31,54,74;
+      --theme-overlay-a:247,250,252;
+      --theme-overlay-b:237,244,247;
       --shadow:0 16px 44px rgba(31, 54, 74, .10);
       --soft-shadow:0 8px 24px rgba(31, 54, 74, .07);
       --radius:14px;
@@ -34,9 +47,10 @@
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;
       color:var(--text);
       background:
-        linear-gradient(135deg,rgba(40,111,209,.08),transparent 34%),
-        linear-gradient(180deg,#f7fafc 0%,#edf4f7 52%,#f8fafc 100%);
+        radial-gradient(circle at 12% 8%,rgba(var(--theme-glow),.16),transparent 34%),
+        linear-gradient(180deg,var(--theme-bg-a) 0%,var(--theme-bg-b) 52%,#f8fafc 100%);
       overflow:hidden;
+      transition:background 1.2s ease,color 1.2s ease;
     }
     body::before{
       content:"";
@@ -45,8 +59,9 @@
       z-index:0;
       pointer-events:none;
       background:
-        linear-gradient(90deg,rgba(247,250,252,.70),rgba(247,250,252,.40) 45%,rgba(237,244,247,.66)),
-        linear-gradient(180deg,rgba(247,250,252,.62),rgba(237,244,247,.74));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.68),rgba(var(--theme-overlay-a),.36) 45%,rgba(var(--theme-overlay-b),.62)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.58),rgba(var(--theme-overlay-b),.70));
+      transition:background 1.2s ease;
     }
     .dish-bg{
       position:fixed;
@@ -69,8 +84,8 @@
       position:absolute;
       inset:0;
       background:
-        linear-gradient(90deg,rgba(247,250,252,.58),rgba(247,250,252,.24) 46%,rgba(247,250,252,.50)),
-        linear-gradient(180deg,rgba(247,250,252,.40),rgba(237,244,247,.66));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.54),rgba(var(--theme-overlay-a),.20) 46%,rgba(var(--theme-overlay-a),.46)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.36),rgba(var(--theme-overlay-b),.62));
     }
 
     button,input,select,textarea{font:inherit}
@@ -88,7 +103,7 @@
     /* Sidebar */
     .sidebar{
       background:rgba(255,255,255,.88);
-      border:1px solid rgba(214,226,235,.95);
+      border:1px solid rgba(var(--theme-border),.95);
       box-shadow:var(--shadow);
       border-radius:18px;
       display:flex;
@@ -110,8 +125,8 @@
       width:44px;height:44px;border-radius:12px;
       display:grid;place-items:center;
       color:#fff;
-      background:linear-gradient(135deg,var(--green),#74dcb9);
-      box-shadow:0 12px 26px rgba(21,167,121,.22);
+      background:linear-gradient(135deg,var(--theme-primary),var(--theme-secondary));
+      box-shadow:0 12px 26px rgba(var(--theme-glow),.24);
       font-weight:900;
       letter-spacing:-.08em;
     }
@@ -123,8 +138,8 @@
       border-radius:999px;
       padding:6px 10px;
       background:var(--green-2);
-      color:#087356;
-      border:1px solid rgba(21,167,121,.16);
+      color:var(--theme-primary);
+      border:1px solid rgba(var(--theme-glow),.16);
       font-weight:650;
     }
 
@@ -1691,18 +1706,91 @@ const state = {
   records: []
 };
 const dishBackgrounds = [
-  "https://foodish-api.com/images/biryani/biryani1.jpg",
-  "https://foodish-api.com/images/pasta/pasta1.jpg",
-  "https://foodish-api.com/images/rice/rice1.jpg",
-  "https://foodish-api.com/images/dosa/dosa1.jpg",
-  "https://foodish-api.com/images/samosa/samosa1.jpg"
-];
-const dishBackgroundSources = [
-  "Foodish biryani image",
-  "Foodish pasta image",
-  "Foodish rice image",
-  "Foodish dosa image",
-  "Foodish samosa image"
+  {
+    url:"https://foodish-api.com/images/biryani/biryani1.jpg",
+    source:"Foodish biryani image",
+    theme:{
+      primary:"#b8751b",
+      primarySoft:"#fff3df",
+      secondary:"#1f8f72",
+      secondarySoft:"#e7f8f1",
+      bgA:"#fff8ed",
+      bgB:"#eef8f2",
+      glow:"184,117,27",
+      border:"229,215,194",
+      overlayA:"255,248,237",
+      overlayB:"238,248,242",
+      shadow:"90,62,35"
+    }
+  },
+  {
+    url:"https://foodish-api.com/images/pasta/pasta1.jpg",
+    source:"Foodish pasta image",
+    theme:{
+      primary:"#d46a32",
+      primarySoft:"#fff0e8",
+      secondary:"#227f69",
+      secondarySoft:"#e8f7f2",
+      bgA:"#fff6ef",
+      bgB:"#f0f7f2",
+      glow:"212,106,50",
+      border:"232,211,197",
+      overlayA:"255,246,239",
+      overlayB:"240,247,242",
+      shadow:"92,55,38"
+    }
+  },
+  {
+    url:"https://foodish-api.com/images/rice/rice1.jpg",
+    source:"Foodish rice image",
+    theme:{
+      primary:"#15976f",
+      primarySoft:"#e8f8f2",
+      secondary:"#5f8f2f",
+      secondarySoft:"#f0f7e8",
+      bgA:"#f6fbf4",
+      bgB:"#edf8f2",
+      glow:"21,151,111",
+      border:"205,226,213",
+      overlayA:"246,251,244",
+      overlayB:"237,248,242",
+      shadow:"39,75,59"
+    }
+  },
+  {
+    url:"https://foodish-api.com/images/dosa/dosa1.jpg",
+    source:"Foodish dosa image",
+    theme:{
+      primary:"#c88619",
+      primarySoft:"#fff4dc",
+      secondary:"#2c80a4",
+      secondarySoft:"#e7f5fb",
+      bgA:"#fff8e9",
+      bgB:"#eef7fb",
+      glow:"200,134,25",
+      border:"231,217,190",
+      overlayA:"255,248,233",
+      overlayB:"238,247,251",
+      shadow:"82,61,35"
+    }
+  },
+  {
+    url:"https://foodish-api.com/images/samosa/samosa1.jpg",
+    source:"Foodish samosa image",
+    theme:{
+      primary:"#b96f22",
+      primarySoft:"#fff0df",
+      secondary:"#4f8c3b",
+      secondarySoft:"#edf7e9",
+      bgA:"#fff4e9",
+      bgB:"#f1f8eb",
+      glow:"185,111,34",
+      border:"229,214,195",
+      overlayA:"255,244,233",
+      overlayB:"241,248,235",
+      shadow:"83,55,32"
+    }
+  }
 ];
 let recordImageStore = [];
 let customerProjectionWindow = null;
@@ -1757,7 +1845,8 @@ function preloadDishBackground(url){
 async function setDishBackground(index, instant = false){
   if(!dishBackgrounds.length) return;
   const normalizedIndex = ((index % dishBackgrounds.length) + dishBackgrounds.length) % dishBackgrounds.length;
-  const url = dishBackgrounds[normalizedIndex];
+  const background = dishBackgrounds[normalizedIndex];
+  const url = background.url;
   const layers = [document.querySelector(".dish-bg-a"), document.querySelector(".dish-bg-b")];
   if(!layers[0] || !layers[1]) return;
   try{
@@ -1769,13 +1858,41 @@ async function setDishBackground(index, instant = false){
   const nextLayer = layers[nextLayerIndex];
   const previousLayer = layers[dishBackgroundActiveLayer];
   nextLayer.style.backgroundImage = `url("${url}")`;
-  nextLayer.dataset.source = dishBackgroundSources[normalizedIndex] || "";
+  nextLayer.dataset.source = background.source || "";
+  applyDishTheme(background.theme || {});
   requestAnimationFrame(()=>{
     nextLayer.classList.add("active");
     if(!instant) previousLayer.classList.remove("active");
   });
   dishBackgroundIndex = normalizedIndex;
   dishBackgroundActiveLayer = nextLayerIndex;
+}
+
+function applyDishTheme(theme){
+  const root = document.documentElement;
+  const pairs = {
+    "--green": theme.primary,
+    "--green-2": theme.primarySoft,
+    "--blue": theme.secondary,
+    "--blue-2": theme.secondarySoft,
+    "--theme-primary": theme.primary,
+    "--theme-primary-soft": theme.primarySoft,
+    "--theme-secondary": theme.secondary,
+    "--theme-secondary-soft": theme.secondarySoft,
+    "--theme-bg-a": theme.bgA,
+    "--theme-bg-b": theme.bgB,
+    "--theme-glow": theme.glow,
+    "--theme-border": theme.border,
+    "--theme-overlay-a": theme.overlayA,
+    "--theme-overlay-b": theme.overlayB
+  };
+  Object.entries(pairs).forEach(([name,value])=>{
+    if(value) root.style.setProperty(name,value);
+  });
+  if(theme.shadow){
+    root.style.setProperty("--shadow",`0 18px 48px rgba(${theme.shadow}, .13)`);
+    root.style.setProperty("--soft-shadow",`0 9px 26px rgba(${theme.shadow}, .08)`);
+  }
 }
 
 function startDishBackgroundRotation(){
