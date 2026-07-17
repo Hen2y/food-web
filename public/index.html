@@ -512,6 +512,18 @@
     }
     .upload-placeholder h3{margin:0 0 8px;font-size:22px;letter-spacing:0}
     .upload-placeholder p{margin:0;color:var(--muted);line-height:1.7}
+    .manual-source-actions{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:18px;
+    }
+    .manual-source-actions .btn{
+      min-width:132px;
+      padding:12px 14px;
+      box-shadow:0 12px 26px rgba(0,0,0,.18);
+    }
     #previewImage{
       display:none;
       width:100%;
@@ -1595,13 +1607,18 @@
           <div class="workspace">
             <div class="card card-pad">
               <div class="upload-zone" id="uploadZone" onclick="handleUploadZoneClick()">
-                <input type="file" id="photoInput" accept="image/*" capture="environment" hidden />
+                <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden />
+                <input type="file" id="fileInput" accept="image/*" hidden />
                 <div class="upload-placeholder" id="uploadPlaceholder">
                   <div class="upload-icon">
                     <svg width="38" height="38" viewBox="0 0 24 24" fill="none"><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm8 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" fill="currentColor"/></svg>
                   </div>
-                  <h3>上傳或拍攝餐盤照片</h3>
-                  <p>支援手機、平板或電腦上傳。AI 將自動進行異物掃描、食材辨識與過敏原比對。</p>
+                  <h3>手动模式</h3>
+                  <p>请选择拍照或上传文件。AI 将自动进行异物扫描、食材识别与过敏原比对。</p>
+                  <div class="manual-source-actions">
+                    <button class="btn btn-primary" type="button" onclick="event.stopPropagation(); openCameraPicker();">拍照识别</button>
+                    <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); openFilePicker();">上传图片</button>
+                  </div>
                 </div>
                 <video id="autoVideo" autoplay muted playsinline></video>
                 <img id="previewImage" alt="餐盤照片預覽" />
@@ -2115,7 +2132,7 @@ function updateTime(){
 }
 setInterval(updateTime,1000); updateTime();
 
-document.getElementById("photoInput").addEventListener("change", async function(e){
+async function handleManualImageSelected(e){
   const file = e.target.files[0];
   if(!file) return;
   try{
@@ -2129,12 +2146,27 @@ document.getElementById("photoInput").addEventListener("change", async function(
     showToast("餐盤照片已上傳");
   }catch(error){
     showToast(error.message || "图片读取失败");
+  }finally{
+    e.target.value = "";
   }
-});
+}
+
+document.getElementById("cameraInput").addEventListener("change", handleManualImageSelected);
+document.getElementById("fileInput").addEventListener("change", handleManualImageSelected);
+
+function openCameraPicker(){
+  if(autoState.enabled) return;
+  document.getElementById("cameraInput").click();
+}
+
+function openFilePicker(){
+  if(autoState.enabled) return;
+  document.getElementById("fileInput").click();
+}
 
 function handleUploadZoneClick(){
   if(autoState.enabled) return;
-  document.getElementById("photoInput").click();
+  openFilePicker();
 }
 
 function compressImage(file){
