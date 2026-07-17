@@ -2046,7 +2046,17 @@ async function analyzePlate(options = {}){
     renderBoxes();
     renderResults();
     renderDashboardResult();
-    await addRecord();
+    const recordSnapshot = {
+      image: state.image,
+      alerts: state.alerts.map(item=>({...item})),
+      person: state.person,
+      risk: state.risk,
+      score: state.score,
+      summary: state.summary
+    };
+    // 识别结果不能等待 Supabase。数据库保存改为后台任务，避免网络较慢时
+    // 自动模式一直停在“AI 正在识别”并阻塞下一盘。
+    void addRecord(recordSnapshot, {silent:true}).catch(()=>{});
     syncState();
     showToast("AI 檢測完成，結果已同步");
     return {ok:true, score:state.score, risk:state.risk};
@@ -2619,23 +2629,24 @@ function renderDashboardResult(){
   `).join("");
 }
 
-async function addRecord(){
+async function addRecord(snapshot = state, options = {}){
   const nowDate = new Date();
-  const primaryAlert = state.alerts[0] || {title:"未見異常"};
-  const allergenAlert = state.alerts.find(a=>a.type === "amber");
-  const status = state.risk === "low" ? "safe" : state.risk === "medium" ? "warn" : "danger";
-  const historyImage = await createHistoryImage(state.image);
+  const alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : [];
+  const primaryAlert = alerts[0] || {title:"未見異常"};
+  const allergenAlert = alerts.find(a=>a.type === "amber");
+  const status = snapshot.risk === "low" ? "safe" : snapshot.risk === "medium" ? "warn" : "danger";
+  const historyImage = await createHistoryImage(snapshot.image);
   const record = {
     dateISO: formatDateKey(nowDate),
     time: nowDate.toLocaleTimeString("zh-Hant",{hour:"2-digit",minute:"2-digit"}),
-    person: state.person.split("｜")[0],
+    person: String(snapshot.person || "访客模式").split("｜")[0],
     result: primaryAlert.title || "分析完成",
-    notice: allergenAlert?.title || (state.risk === "low" ? "無" : "需人工覆核"),
+    notice: allergenAlert?.title || (snapshot.risk === "low" ? "無" : "需人工覆核"),
     status,
-    risk: state.risk,
-    score: state.score,
+    risk: snapshot.risk,
+    score: snapshot.score,
     allergenHit: Boolean(allergenAlert),
-    summary: state.summary,
+    summary: snapshot.summary,
     image: historyImage,
     createdAt: nowDate.toISOString()
   };
@@ -2643,7 +2654,8 @@ async function addRecord(){
   state.records = state.records.slice(0,50);
   renderDashboardStats();
   renderTables();
-  const saved = await saveRecordToDatabase(record);
+  syncState();
+  const saved = await saveRecordToDatabase(record, options);
   if(saved){
     await loadDatabaseRecords({silent:true});
   }
@@ -2699,7 +2711,7 @@ async function loadDatabaseRecords(options = {}){
   return false;
 }
 
-async function saveRecordToDatabase(record){
+async function saveRecordToDatabase(record, options = {}){
   try{
     const response = await fetch("/api/records", {
       method:"POST",
@@ -2710,7 +2722,7 @@ async function saveRecordToDatabase(record){
     if(!response.ok) throw new Error(data.error || "保存数据库记录失败");
     return Boolean(data.configured && data.saved);
   }catch(error){
-    showToast(error.message || "数据库保存失败，已保存在本机");
+    if(!options.silent) showToast(error.message || "数据库保存失败，已保存在本机");
     return false;
   }
 }
