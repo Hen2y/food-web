@@ -1989,12 +1989,13 @@ const autoState = {
   stableMs: 4000,
   resultMs: 5000,
   clearMs: 1600,
-  cooldownMs: 12000,
-  apiCooldownMs: 15000,
-  mealPresenceThreshold: 45,
-  centerFoodThreshold: 14,
-  minFoodLikeRatio: 0.04,
-  minFrameChange: 7,
+  cooldownMs: 0,
+  apiCooldownMs: 7000,
+  mealPresenceThreshold: 62,
+  centerFoodThreshold: 34,
+  minFoodLikeRatio: 0.08,
+  minCenterFoodLikeRatio: 0.07,
+  minFrameChange: 10,
   stableSince: 0,
   clearSince: 0,
   waitNextSince: 0,
@@ -2716,12 +2717,12 @@ function beginWaitingNextPlate(message){
   autoState.clearSince = 0;
   autoState.waitNextSince = Date.now();
   autoState.busy = false;
-  updateAutoStatus("waitingClear", message || "等待下一份餐盘；换盘后会自动继续识别。");
+  updateAutoStatus("waitingPlate", message || "等待下一份餐盘；取走本盘或换上新盘后会自动继续。");
 }
 
 function getAutoFrameMetrics(){
   const video = document.getElementById("autoVideo");
-  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, signature:null};
+  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, centerFoodLikeRatio:0, signature:null};
   const canvas = getAutoFrameMetrics.canvas || (getAutoFrameMetrics.canvas = document.createElement("canvas"));
   const width = 96, height = 72;
   canvas.width = width; canvas.height = height;
@@ -2780,7 +2781,8 @@ function getAutoFrameMetrics(){
   const presenceScore = Math.round(Math.min(100, (colorful/total)*95 + (foodLike/total)*80 + (contrast/total)*40 + (bright/total)*10));
   const centerScore = centerTotal ? Math.round(Math.min(100, (centerColorful/centerTotal)*100 + (centerFoodLike/centerTotal)*90)) : 0;
   const foodLikeRatio = foodLike / total;
-  return {presenceScore, centerScore, foodLikeRatio, signature};
+  const centerFoodLikeRatio = centerTotal ? centerFoodLike / centerTotal : 0;
+  return {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, signature};
 }
 
 function getMealPresenceScore(){
@@ -2790,11 +2792,11 @@ function getMealPresenceScore(){
 async function monitorAutoFrame(){
   if(!autoState.enabled || autoState.busy) return;
   const now = Date.now();
-  const {presenceScore, centerScore, foodLikeRatio, signature} = getAutoFrameMetrics();
+  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, signature} = getAutoFrameMetrics();
   autoState.lastPresenceScore = presenceScore;
   autoState.currentSignature = signature;
   document.getElementById("autoPresenceText").textContent = `画面检测 ${presenceScore}% / 中心 ${centerScore}%`;
-  const hasMeal = presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio;
+  const hasMeal = presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio;
 
   if(autoState.phase === "waitingPlate"){
     if(hasMeal){
@@ -2806,30 +2808,28 @@ async function monitorAutoFrame(){
       }
     }else{
       autoState.stableSince = 0;
-      updateAutoStatus("waitingPlate", presenceScore >= autoState.mealPresenceThreshold ? "请把餐盘放到画面中央" : "等待餐盘进入画面");
+      updateAutoStatus("waitingPlate", presenceScore >= autoState.mealPresenceThreshold ? "画面有变化，但还不像完整餐盘；请把餐盘放到画面中央" : "等待餐盘进入画面");
     }
   }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
-    const waited = now - (autoState.waitNextSince || now);
     const changed = frameSignatureDistance(signature, autoState.lastCaptureSignature);
     if(!hasMeal){
       if(!autoState.clearSince) autoState.clearSince = now;
-      if(now - autoState.clearSince >= autoState.clearMs || waited >= autoState.cooldownMs){
+      if(now - autoState.clearSince >= autoState.clearMs){
         autoState.phase = "waitingPlate";
         autoState.stableSince = 0;
         autoState.clearSince = 0;
         updateAutoStatus("waitingPlate", "已准备好，等待下一份餐盘");
       }else{
-        updateAutoStatus("waitingClear", "正在切换到下一轮");
+        updateAutoStatus("waitingPlate", "画面正在清空，马上进入下一轮");
       }
-    }else if(waited >= autoState.cooldownMs && changed >= autoState.minFrameChange){
+    }else if(changed >= autoState.minFrameChange){
       autoState.phase = "waitingPlate";
       autoState.stableSince = now;
       autoState.clearSince = 0;
       updateAutoStatus("waitingPlate", "检测到新的餐盘画面，正在确认稳定性");
     }else{
       autoState.clearSince = 0;
-      const seconds = Math.max(0, Math.ceil((autoState.cooldownMs - waited)/1000));
-      updateAutoStatus("waitingClear", seconds ? `结果展示结束后 ${seconds} 秒进入下一轮` : "等待换盘或画面变化后继续识别");
+      updateAutoStatus("waitingPlate", "请取走本盘或换上新餐盘；画面变化后会立刻继续");
     }
   }
 }
