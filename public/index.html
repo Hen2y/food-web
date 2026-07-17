@@ -2020,8 +2020,13 @@ async function analyzePlate(options = {}){
     showToast("AI 檢測完成，結果已同步");
     return {ok:true, score:state.score, risk:state.risk};
   }catch(error){
-    showToast(error.message || "AI 分析失败，请重试");
-    return {ok:false, error:error.message || "AI 分析失败"};
+    const message = error.message || "AI 分析失败，请重试";
+    renderAnalysisError(message);
+    if(autoState.enabled && isQuotaOrRateLimitError(message)){
+      showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式将暂停，避免继续扣费。", "!");
+    }
+    showToast(message);
+    return {ok:false, error:message};
   }finally{
     btn.disabled = false;
     spinner.style.display = "none";
@@ -2075,7 +2080,8 @@ async function startAutoMode(){
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
     document.getElementById("autoConfirmBtn").style.display = "none";
-    updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，等待餐盘进入画面`);
+    showAutoBanner("safe", "自动模式已开启", `风险阈值 ${threshold}｜额度保护已开启｜等待餐盘进入画面`, "");
+    updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，额度保护已开启，等待餐盘进入画面`);
     autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
   }catch(error){
     if(autoState.stream){
@@ -2419,6 +2425,23 @@ function renderResults(){
       <div><strong>${a.title}</strong><p>${a.desc}</p></div>
     </div>
   `).join("");
+}
+
+function renderAnalysisError(message){
+  const badge = document.getElementById("riskBadge");
+  const score = document.getElementById("riskScore");
+  const progress = document.getElementById("riskProgress");
+  const list = document.getElementById("resultList");
+  badge.className = "risk-badge high";
+  badge.textContent = "请求失败";
+  score.textContent = "--";
+  progress.style.width = "0%";
+  list.innerHTML = `
+    <div class="result-item red">
+      <div class="bullet">!</div>
+      <div><strong>AI 请求没有完成</strong><p>${escapeHtml(message || "请稍后重试。")}</p></div>
+    </div>
+  `;
 }
 
 function renderDashboardResult(){
