@@ -2927,6 +2927,16 @@ window.addEventListener("message", event=>{
 async function initMode(){
   const synced = getSyncedState();
   Object.assign(state, synced, {dataVersion: 3});
+  // 顾客屏幕不需要等待 Supabase 历史记录。线上数据库唤醒较慢时，
+  // 先 await 会让新窗口长时间停在操作台，看起来像“投影没反应”。
+  if(location.hash === "#customer"){
+    document.getElementById("operatorApp").style.display = "none";
+    document.getElementById("customerScreen").style.display = "block";
+    document.body.style.overflow = "auto";
+    updateCustomerScreen();
+    setInterval(updateCustomerScreen, 700);
+    return;
+  }
   if(state.image){
     resetManualImageEditor(state.image, !state.analyzed);
     setPreview(state.image);
@@ -2940,13 +2950,6 @@ async function initMode(){
   renderTables();
   renderDashboardResult();
   await loadDatabaseRecords({silent:true});
-  if(location.hash === "#customer"){
-    document.getElementById("operatorApp").style.display = "none";
-    document.getElementById("customerScreen").style.display = "block";
-    document.body.style.overflow = "auto";
-    updateCustomerScreen();
-    setInterval(updateCustomerScreen, 700);
-  }
   renderProfiles();
 }
 
