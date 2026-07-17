@@ -2887,7 +2887,7 @@ function beginWaitingNextPlate(message){
 
 function getAutoFrameMetrics(){
   const video = document.getElementById("autoVideo");
-  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, centerFoodLikeRatio:0, centerColorfulRatio:0, signature:null};
+  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, centerFoodLikeRatio:0, centerColorfulRatio:0, faceLikeScore:0, signature:null};
   const canvas = getAutoFrameMetrics.canvas || (getAutoFrameMetrics.canvas = document.createElement("canvas"));
   const width = 96, height = 72;
   canvas.width = width; canvas.height = height;
@@ -2895,7 +2895,8 @@ function getAutoFrameMetrics(){
   ctx.drawImage(video, 0, 0, width, height);
   const data = ctx.getImageData(0,0,width,height).data;
   let colorful = 0, foodLike = 0, bright = 0, contrast = 0;
-  let centerColorful = 0, centerFoodLike = 0, centerTotal = 0;
+  let centerColorful = 0, centerFoodLike = 0, centerSkinLike = 0, centerDarkTop = 0, centerTotal = 0;
+  let upperSkinLike = 0, upperDark = 0, upperTotal = 0;
   let prevLum = null;
   const total = width * height;
   const signature = [];
@@ -2910,12 +2911,21 @@ function getAutoFrameMetrics(){
     if(lum > 45 && lum < 245) bright++;
     const isColorful = sat > .24 && lum > 50 && lum < 235;
     const isFoodLike = (r > g * .95 && r > b * 1.10 && lum > 60) || (g > r * .90 && g > b * 1.10 && lum > 60);
+    const isSkinLike = r > 72 && g > 42 && b > 24 && r > g * 1.12 && g > b * 1.06 && r - b > 34 && sat > .18 && sat < .68 && lum > 64 && lum < 225;
+    const isDarkHairLike = lum < 58 && sat < .55;
     if(isColorful) colorful++;
     if(isFoodLike) foodLike++;
+    if(py < height * .42 && px > width * .18 && px < width * .82){
+      upperTotal++;
+      if(isSkinLike) upperSkinLike++;
+      if(isDarkHairLike) upperDark++;
+    }
     if(px > width * .22 && px < width * .78 && py > height * .22 && py < height * .82){
       centerTotal++;
       if(isColorful) centerColorful++;
       if(isFoodLike) centerFoodLike++;
+      if(isSkinLike) centerSkinLike++;
+      if(isDarkHairLike && py < height * .46) centerDarkTop++;
     }
     if(prevLum !== null && Math.abs(lum - prevLum) > 28) contrast++;
     prevLum = lum;
@@ -2948,8 +2958,13 @@ function getAutoFrameMetrics(){
   const foodLikeRatio = foodLike / total;
   const centerFoodLikeRatio = centerTotal ? centerFoodLike / centerTotal : 0;
   const centerColorfulRatio = centerTotal ? centerColorful / centerTotal : 0;
+  const centerSkinRatio = centerTotal ? centerSkinLike / centerTotal : 0;
+  const upperSkinRatio = upperTotal ? upperSkinLike / upperTotal : 0;
+  const upperDarkRatio = upperTotal ? upperDark / upperTotal : 0;
+  const centerDarkTopRatio = centerTotal ? centerDarkTop / centerTotal : 0;
+  const faceLikeScore = Math.round(Math.min(100, centerSkinRatio * 86 + upperSkinRatio * 46 + upperDarkRatio * 28 + centerDarkTopRatio * 28));
   const groundedPresenceScore = Math.round(Math.min(100, (colorful/total)*70 + (foodLike/total)*120 + (centerFoodLikeRatio)*42 + (centerColorfulRatio)*26 + (contrast/total)*16));
-  return {presenceScore:groundedPresenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, signature};
+  return {presenceScore:groundedPresenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, signature};
 }
 
 function getMealPresenceScore(){
@@ -2959,11 +2974,12 @@ function getMealPresenceScore(){
 async function monitorAutoFrame(){
   if(!autoState.enabled || autoState.busy) return;
   const now = Date.now();
-  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, signature} = getAutoFrameMetrics();
+  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, signature} = getAutoFrameMetrics();
   autoState.lastPresenceScore = presenceScore;
   autoState.currentSignature = signature;
-  document.getElementById("autoPresenceText").textContent = `画面检测 ${presenceScore}% / 中心 ${centerScore}%`;
-  const hasMeal = presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio && centerColorfulRatio >= autoState.minCenterColorfulRatio;
+  const looksLikeFace = faceLikeScore >= 42 && centerFoodLikeRatio < 0.22;
+  document.getElementById("autoPresenceText").textContent = `画面 ${presenceScore}% / 中心 ${centerScore}% / 人像 ${faceLikeScore}%`;
+  const hasMeal = !looksLikeFace && presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio && centerColorfulRatio >= autoState.minCenterColorfulRatio;
 
   if(autoState.phase === "waitingPlate"){
     if(hasMeal){
@@ -2975,7 +2991,7 @@ async function monitorAutoFrame(){
       }
     }else{
       autoState.stableSince = 0;
-      updateAutoStatus("waitingPlate", presenceScore >= autoState.mealPresenceThreshold ? "画面有变化，但还不像完整餐盘；请把餐盘放到画面中央" : "等待餐盘进入画面");
+      updateAutoStatus("waitingPlate", looksLikeFace ? "检测到人物画面，请把餐盘放到画面中央后再识别" : presenceScore >= autoState.mealPresenceThreshold ? "画面有变化，但还不像完整餐盘；请把餐盘放到画面中央" : "等待餐盘进入画面");
     }
   }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
     const changed = frameSignatureDistance(signature, autoState.lastCaptureSignature);
