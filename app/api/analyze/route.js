@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { expandAllergens } from "./allergenLexicon.js";
+import { addDishDerivedDetections, buildDishKnowledge } from "./dishKnowledge.js";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,7 @@ const SYSTEM_PROMPT = `你是校园食堂的餐盘图像初筛助手。你的结
 过敏原和有害异物是同等重要的两类任务。必须完整检查整个餐盘，不能因为发现了过敏原就停止寻找异物，也不能只在用户登记了过敏原时才检查异物。
 对玻璃、金属尖片、昆虫、头发、硬塑料等非食用物，即使没有登记任何过敏原，也必须作为 foreign_object 返回并标框。明显位于餐盘外、食物外的背景物体不要报告。
 用户登记的过敏原会附带自动扩展词库。请同时检查过敏原本身、常见别名、酱料、加工品和常见含该成分的菜品。
+请先尽量识别菜品名称，再用菜品常识推断隐藏过敏源。比如鸡豆花外观像豆腐/豆花，但常由鸡肉/鸡蓉、蛋清、高汤和淀粉制成；如果判断为鸡豆花，不要仅凭外观当作豆腐或大豆制品，应提示鸡肉/蛋类等隐藏成分风险。
 如果图片中能明确看到相关食物/配料，可以给出较高 confidence 并标框；如果只是酱料或隐藏成分“可能含有”，请在 description 写明“可能含有/需询问食堂确认”，confidence 应偏低，box 可圈出可疑菜品区域。
 请加入食堂餐盘场景常识判断：热饭、热菜、汤面或常温餐盘中一般不应出现冰块；如果在米饭或菜品里看到透明、反光、尖锐或不规则硬物，不要轻易标为“冰块”，应优先标为“疑似透明异物”，并在 description 中写“可能是玻璃、硬塑料或其他透明异物，需人工确认”。除非图片明确显示冷饮、冰品或冰镇场景，否则不要把餐盘中的透明异物判断为冰块。
 对不合常理的识别要保守：不要把明显不该出现在餐盘里的物体解释成正常食材；也不要武断说一定是玻璃。请用“疑似/可能/需人工确认”表达不确定性。
@@ -133,6 +135,10 @@ export async function POST(request) {
       return NextResponse.json({ error: "请上传不超过约 7MB 的图片" }, { status: 400 });
     }
     const allergenContext = expandAllergens(allergens);
+    const dishKnowledge = buildDishKnowledge([...allergenContext.originals, ...allergenContext.expandedTerms]);
+    const dishKnowledgeText = dishKnowledge.length
+      ? dishKnowledge.map((item) => `${item.dish}：${item.note}`).join("\n")
+      : "无特别匹配的菜品知识；仍需按常见菜品和配料推断隐藏过敏源。";
 
     const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -158,7 +164,9 @@ export async function POST(request) {
                   allergenContext.matched.length
                     ? `扩展说明：${allergenContext.matched.map((item) => `${item.input}→${item.note}`).join("；")}`
                     : "没有匹配到内置扩展词库时，请只按用户原始输入检查。",
+                  `内置菜品知识库：\n${dishKnowledgeText}`,
                   "请优先标出与登记过敏原或扩展词相关的可见风险；对隐藏成分只给风险提示，不要把不确定内容说成确定。",
+                  "识别菜品名时要考虑同形不同料：鸡豆花看起来像白色豆腐/豆花，但通常不是豆腐，而是鸡肉/蛋清制成；如果画面是白色细嫩块状物浸在清汤里、带红色点缀和绿叶装饰，应把鸡豆花作为候选菜名，并检查鸡肉/蛋清隐藏过敏源。",
                   "请用常识复核结果：若透明/反光物位于米饭、热菜、汤菜中，不要标为冰块；应作为疑似透明异物处理，并提醒人工确认是否为玻璃、塑料或其他异物。",
                   "若看到正常餐饮元素，例如碗盘边缘、汤勺、杯子、桌面反光、酱汁油光、纸质照片边框、背景菜单牌，不要把它们当成餐盘异物。",
                   "请正确识别常见菜品：肉丸/菇类/青菜/云吞/面条/红烧或卤肉/整鱼/香菜/汤汁等。整鱼的鱼头、鱼骨、鱼尾通常属于菜品本身；只有登记鱼类过敏时才作为 allergen 风险提示。",
@@ -180,7 +188,8 @@ export async function POST(request) {
     }
     const content = payload.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw new Error("Kimi API 没有返回分析内容");
-    return NextResponse.json(normalize(parseJson(content)));
+    const parsed = addDishDerivedDetections(parseJson(content), [...allergenContext.originals, ...allergenContext.expandedTerms]);
+    return NextResponse.json(normalize(parsed));
   } catch (error) {
     const message = error?.name === "TimeoutError" ? "AI 分析超过 120 秒，请换一张较小的图片后重试" : (error?.message || "分析失败");
     return NextResponse.json({ error: message }, { status: 500 });
