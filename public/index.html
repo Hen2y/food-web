@@ -1205,7 +1205,7 @@
           <div class="label">本日檢測狀態</div>
           <div class="value" id="sidebarTodayStatus">0 份餐盤已完成</div>
           <div class="mini-actions">
-            <button onclick="openCustomerScreen()">投影</button>
+            <button class="customer-project-btn" onclick="openCustomerScreen()">投影</button>
             <button onclick="resetDemo()">重設</button>
           </div>
         </div>
@@ -1222,7 +1222,7 @@
           <div class="chip"><span class="dot"></span> AI 模型在線</div>
           <div class="chip" id="currentTime">--:--</div>
           <button class="btn btn-ghost" onclick="switchPage('scan')">開始檢測</button>
-          <button class="btn btn-blue" onclick="openCustomerScreen()">投影到顧客螢幕</button>
+          <button class="btn btn-blue customer-project-btn" onclick="openCustomerScreen()">投影到顧客螢幕</button>
         </div>
       </header>
 
@@ -1381,7 +1381,7 @@
                   <span class="spinner" id="analyzeSpinner"></span>
                   <span id="analyzeBtnText">提交 AI 讀取</span>
                 </button>
-                <button class="btn btn-blue" onclick="event.stopPropagation(); openCustomerScreen();">投影到顧客螢幕</button>
+                <button class="btn btn-blue customer-project-btn" onclick="event.stopPropagation(); openCustomerScreen();">投影到顧客螢幕</button>
                 <button class="btn btn-ghost" onclick="event.stopPropagation(); loadSample();">使用示範餐盤</button>
               </div>
             </div>
@@ -1537,7 +1537,7 @@
                 <label>底部提醒文字</label>
                 <textarea>本結果由 AI 輔助判斷，不能替代人工檢查。如有疑問，請向現場職員確認。</textarea>
               </div>
-              <button class="btn btn-blue" style="margin-top:14px;" onclick="openCustomerScreen()">開啟顧客展示畫面</button>
+              <button class="btn btn-blue customer-project-btn" style="margin-top:14px;" onclick="openCustomerScreen()">開啟顧客展示畫面</button>
             </div>
           </div>
         </div>
@@ -1625,6 +1625,7 @@ const autoState = {
   enabled: false,
   stream: null,
   monitorTimer: null,
+  resultTimer: null,
   phase: "off",
   threshold: 60,
   stableMs: 4000,
@@ -1843,6 +1844,15 @@ function resetManualImageEdit(){
   scheduleManualImageEdit();
 }
 
+function setCustomerProjectionDisabled(disabled){
+  document.querySelectorAll(".customer-project-btn").forEach(button=>{
+    button.disabled = Boolean(disabled);
+    button.style.opacity = disabled ? ".45" : "";
+    button.style.cursor = disabled ? "not-allowed" : "";
+    button.title = disabled ? "自动模式开启时不使用顾客投影" : "";
+  });
+}
+
 function waitForVideoReady(video){
   return new Promise((resolve,reject)=>{
     if(video.readyState >= 2 && video.videoWidth && video.videoHeight) return resolve();
@@ -1972,10 +1982,13 @@ async function startAutoMode(){
     autoState.lastCaptureSignature = null;
     autoState.currentSignature = null;
     autoState.busy = false;
+    if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
+    autoState.resultTimer = null;
     const video = document.getElementById("autoVideo");
     const zone = document.getElementById("uploadZone");
     restoreAutoLiveView();
     zone.classList.add("auto-live");
+    setCustomerProjectionDisabled(true);
     video.srcObject = stream;
     video.muted = true;
     video.playsInline = true;
@@ -1993,6 +2006,9 @@ async function startAutoMode(){
     }
     autoState.enabled = false;
     autoState.stream = null;
+    if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
+    autoState.resultTimer = null;
+    setCustomerProjectionDisabled(false);
     const video = document.getElementById("autoVideo");
     video.pause();
     video.srcObject = null;
@@ -2010,6 +2026,8 @@ function stopAutoMode(){
   autoState.busy = false;
   if(autoState.monitorTimer) clearInterval(autoState.monitorTimer);
   autoState.monitorTimer = null;
+  if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
+  autoState.resultTimer = null;
   if(autoState.stream){
     autoState.stream.getTracks().forEach(track=>track.stop());
   }
@@ -2021,6 +2039,7 @@ function stopAutoMode(){
   document.getElementById("autoStartBtn").disabled = false;
   document.getElementById("autoStopBtn").disabled = true;
   document.getElementById("autoConfirmBtn").style.display = "none";
+  setCustomerProjectionDisabled(false);
   updateAutoStatus("off", "自动模式未开启");
 }
 
@@ -2190,10 +2209,18 @@ function captureAutoImage(){
 }
 
 function restoreAutoLiveView(){
+  const video = document.getElementById("autoVideo");
   const img = document.getElementById("previewImage");
+  const zone = document.getElementById("uploadZone");
   img.style.display = "none";
+  img.removeAttribute("src");
+  if(autoState.enabled){
+    zone.classList.add("auto-live");
+    video.style.display = "block";
+    if(video.srcObject && video.paused) video.play().catch(()=>{});
+  }
   document.getElementById("bboxLayer").innerHTML = "";
-  document.getElementById("uploadZone").classList.remove("has-image", "analyzed", "auto-review");
+  zone.classList.remove("has-image", "analyzed", "auto-review");
 }
 
 async function captureAndAnalyzeAuto(){
@@ -2218,10 +2245,12 @@ async function captureAndAnalyzeAuto(){
   if(state.score < autoState.threshold){
     autoState.phase = "showingLow";
     updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${Math.round(autoState.resultMs/1000)} 秒后等待下一盘`);
-    setTimeout(()=>{
+    if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
+    autoState.resultTimer = setTimeout(()=>{
+      autoState.resultTimer = null;
       if(!autoState.enabled) return;
       restoreAutoLiveView();
-      beginWaitingNextPlate("本盘已自动通过。请直接换上下一份餐盘，系统会自动继续。");
+      beginWaitingNextPlate("本盘已自动通过，已恢复相机预览。请换上下一份餐盘。");
     }, autoState.resultMs);
   }else{
     autoState.phase = "needsConfirm";
@@ -2569,6 +2598,10 @@ function ensureCustomerProjection(options = {}){
 }
 
 function openCustomerScreen(){
+  if(autoState.enabled){
+    showToast("自动模式开启时已禁用顾客投影");
+    return;
+  }
   ensureCustomerProjection();
 }
 
