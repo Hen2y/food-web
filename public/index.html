@@ -1843,6 +1843,35 @@ function resetManualImageEdit(){
   scheduleManualImageEdit();
 }
 
+function waitForVideoReady(video){
+  return new Promise((resolve,reject)=>{
+    if(video.readyState >= 2 && video.videoWidth && video.videoHeight) return resolve();
+    const timer = setTimeout(()=>{
+      cleanup();
+      reject(new Error("摄像头画面加载超时"));
+    }, 8000);
+    function cleanup(){
+      clearTimeout(timer);
+      video.removeEventListener("loadedmetadata", onReady);
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
+    }
+    function onReady(){
+      if(video.videoWidth && video.videoHeight){
+        cleanup();
+        resolve();
+      }
+    }
+    function onError(){
+      cleanup();
+      reject(new Error("摄像头画面无法播放"));
+    }
+    video.addEventListener("loadedmetadata", onReady);
+    video.addEventListener("canplay", onReady);
+    video.addEventListener("error", onError);
+  });
+}
+
 function setPreview(src){
   const zone = document.getElementById("uploadZone");
   const img = document.getElementById("previewImage");
@@ -1944,18 +1973,34 @@ async function startAutoMode(){
     autoState.currentSignature = null;
     autoState.busy = false;
     const video = document.getElementById("autoVideo");
-    video.srcObject = stream;
-    await video.play();
+    const zone = document.getElementById("uploadZone");
     restoreAutoLiveView();
-    document.getElementById("uploadZone").classList.add("auto-live");
+    zone.classList.add("auto-live");
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    updateAutoStatus("waitingPlate", "摄像头已打开，正在载入实时预览...");
+    await waitForVideoReady(video);
+    await video.play();
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
     document.getElementById("autoConfirmBtn").style.display = "none";
     updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，等待餐盘进入画面`);
     autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
   }catch(error){
+    if(autoState.stream){
+      autoState.stream.getTracks().forEach(track=>track.stop());
+    }
+    autoState.enabled = false;
+    autoState.stream = null;
+    const video = document.getElementById("autoVideo");
+    video.pause();
+    video.srcObject = null;
+    document.getElementById("uploadZone").classList.remove("auto-live", "auto-review");
+    document.getElementById("autoStartBtn").disabled = false;
+    document.getElementById("autoStopBtn").disabled = true;
     showToast("无法打开摄像头，请检查浏览器权限");
-    updateAutoStatus("danger", "摄像头开启失败，请允许浏览器使用相机");
+    updateAutoStatus("danger", error.message || "摄像头开启失败，请允许浏览器使用相机");
   }
 }
 
