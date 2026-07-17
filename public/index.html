@@ -1986,16 +1986,17 @@ const autoState = {
   resultTimer: null,
   phase: "off",
   threshold: 50,
-  stableMs: 4000,
+  stableMs: 5000,
   resultMs: 5000,
   clearMs: 1600,
   cooldownMs: 0,
-  apiCooldownMs: 7000,
-  mealPresenceThreshold: 62,
-  centerFoodThreshold: 34,
-  minFoodLikeRatio: 0.08,
-  minCenterFoodLikeRatio: 0.07,
-  minFrameChange: 10,
+  apiCooldownMs: 3000,
+  mealPresenceThreshold: 74,
+  centerFoodThreshold: 52,
+  minFoodLikeRatio: 0.12,
+  minCenterFoodLikeRatio: 0.13,
+  minCenterColorfulRatio: 0.18,
+  minFrameChange: 12,
   stableSince: 0,
   clearSince: 0,
   waitNextSince: 0,
@@ -2085,7 +2086,7 @@ function startDishBackgroundRotation(){
   dishBackgroundTimer = setInterval(()=>{
     if(document.hidden) return;
     setDishBackground(dishBackgroundIndex + 1);
-  }, 10000);
+  }, 3000);
 }
 
 const pageInfo = {
@@ -2722,7 +2723,7 @@ function beginWaitingNextPlate(message){
 
 function getAutoFrameMetrics(){
   const video = document.getElementById("autoVideo");
-  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, centerFoodLikeRatio:0, signature:null};
+  if(!video.videoWidth || !video.videoHeight) return {presenceScore:0, centerScore:0, foodLikeRatio:0, centerFoodLikeRatio:0, centerColorfulRatio:0, signature:null};
   const canvas = getAutoFrameMetrics.canvas || (getAutoFrameMetrics.canvas = document.createElement("canvas"));
   const width = 96, height = 72;
   canvas.width = width; canvas.height = height;
@@ -2782,7 +2783,9 @@ function getAutoFrameMetrics(){
   const centerScore = centerTotal ? Math.round(Math.min(100, (centerColorful/centerTotal)*100 + (centerFoodLike/centerTotal)*90)) : 0;
   const foodLikeRatio = foodLike / total;
   const centerFoodLikeRatio = centerTotal ? centerFoodLike / centerTotal : 0;
-  return {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, signature};
+  const centerColorfulRatio = centerTotal ? centerColorful / centerTotal : 0;
+  const groundedPresenceScore = Math.round(Math.min(100, (colorful/total)*70 + (foodLike/total)*120 + (centerFoodLikeRatio)*42 + (centerColorfulRatio)*26 + (contrast/total)*16));
+  return {presenceScore:groundedPresenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, signature};
 }
 
 function getMealPresenceScore(){
@@ -2792,11 +2795,11 @@ function getMealPresenceScore(){
 async function monitorAutoFrame(){
   if(!autoState.enabled || autoState.busy) return;
   const now = Date.now();
-  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, signature} = getAutoFrameMetrics();
+  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, signature} = getAutoFrameMetrics();
   autoState.lastPresenceScore = presenceScore;
   autoState.currentSignature = signature;
   document.getElementById("autoPresenceText").textContent = `画面检测 ${presenceScore}% / 中心 ${centerScore}%`;
-  const hasMeal = presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio;
+  const hasMeal = presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio && centerColorfulRatio >= autoState.minCenterColorfulRatio;
 
   if(autoState.phase === "waitingPlate"){
     if(hasMeal){

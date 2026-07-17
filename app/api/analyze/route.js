@@ -18,7 +18,7 @@ const SYSTEM_PROMPT = `你是校园食堂的餐盘图像初筛助手。你的结
 常见菜品识别请更具体：肉丸、菇类、辣椒、葱花、青菜、云吞/馄饨、面条、红烧肉/卤肉、整鱼、鱼皮、鱼头、鱼尾、鱼骨、香菜、酱汁或汤汁都属于正常可见食物/配料。整鱼中的鱼头、鱼尾、鱼骨和鱼皮一般是菜品本身；只有发现非食物硬物、包装残留、头发、昆虫、金属或玻璃等才标为 foreign_object。
 如果画面像从相册、纸质照片或屏幕中拍摄的餐食图片，请仍然按可见餐食内容分析，但不要把纸张边框、屏幕反光、照片反光当作餐盘异物。
 score 必须和 risk 一致：low 通常 0-34，medium 通常 35-69，high 通常 70-100。只要返回 medium 或 high，就不要给 0-10 这种极低分。
-安全分级规则：与登记过敏原匹配且 confidence>=0.80 时必须 high；玻璃、金属、昆虫、硬塑料等有害异物 confidence>=0.75 时也必须 high。不能把 95% 确认的过敏原或有害异物评为中风险。
+安全分级规则：与登记过敏原匹配且 confidence>=0.88 时必须 high；玻璃、金属、昆虫、硬塑料等明确有害异物 confidence>=0.82 时才必须 high。不能把 95% 确认的过敏原或有害异物评为中风险。
 仅返回 JSON，不要 Markdown。坐标采用相对图片的百分比，x/y 为左上角，width/height 为宽高，均为 0-100。看不清时降低 confidence，不得编造。
 JSON 格式：{"risk":"low|medium|high","score":0,"summary":"中文摘要","foods":["食物"],"detections":[{"category":"allergen|foreign_object","label":"名称","description":"中文说明","confidence":0.0,"box":{"x":0,"y":0,"width":0,"height":0}}]}`;
 
@@ -58,34 +58,47 @@ function normalizeDetection(item) {
   };
 }
 
+function isStrongForeignObject(item) {
+  const text = `${item.label || ""} ${item.description || ""}`;
+  return /玻璃|金属|铁丝|刀片|尖片|硬塑料|塑料片|昆虫|苍蝇|蟑螂|虫|头发|毛发|包装|清洁剂|洗涤剂|异物|foreign|glass|metal|plastic|insect|hair/i.test(text);
+}
+
 function deriveRiskAndScore(risk, score, detections) {
   let calibrated = clamp(score);
   const allergenDetections = detections.filter((item) => item.category === "allergen");
   const foreignDetections = detections.filter((item) => item.category === "foreign_object");
   const maxAllergenConfidence = allergenDetections.reduce((max, item) => Math.max(max, Number(item.confidence) || 0), 0);
   const maxForeignConfidence = foreignDetections.reduce((max, item) => Math.max(max, Number(item.confidence) || 0), 0);
+  const maxStrongForeignConfidence = foreignDetections
+    .filter(isStrongForeignObject)
+    .reduce((max, item) => Math.max(max, Number(item.confidence) || 0), 0);
   const maxConfidence = Math.max(maxAllergenConfidence, maxForeignConfidence);
   let derivedRisk = risk;
 
   if (detections.length) calibrated = Math.max(calibrated, 12);
-  if (allergenDetections.length) calibrated = Math.max(calibrated, 28);
-  if (foreignDetections.length) calibrated = Math.max(calibrated, 45);
+  if (allergenDetections.length) calibrated = Math.max(calibrated, maxAllergenConfidence >= 0.65 ? 38 : 26);
+  if (foreignDetections.length) calibrated = Math.max(calibrated, maxStrongForeignConfidence >= 0.65 ? 48 : 32);
 
-  // A highly confident allergen or harmful foreign object is a high-risk safety event,
-  // even when the model's top-level risk label is inconsistent.
-  if (maxAllergenConfidence >= 0.8) {
+  // Only clear evidence should become high risk. Uncertain hidden ingredients,
+  // reflections, sauce shine, or low-confidence guesses stay in medium so the
+  // cafeteria can review them without blocking every plate.
+  if (maxAllergenConfidence >= 0.88) {
     derivedRisk = "high";
-    calibrated = Math.max(calibrated, 85, Math.round(maxAllergenConfidence * 100));
+    calibrated = Math.max(calibrated, 82, Math.round(maxAllergenConfidence * 94));
   }
-  if (maxForeignConfidence >= 0.75) {
+  if (maxStrongForeignConfidence >= 0.82) {
     derivedRisk = "high";
-    calibrated = Math.max(calibrated, 82, Math.round(maxForeignConfidence * 100));
+    calibrated = Math.max(calibrated, 80, Math.round(maxStrongForeignConfidence * 94));
   }
-  if (derivedRisk === "low" && maxConfidence >= 0.35) {
+  if (derivedRisk === "high" && maxAllergenConfidence < 0.88 && maxStrongForeignConfidence < 0.82) {
+    derivedRisk = "medium";
+    calibrated = Math.min(calibrated || 62, 68);
+  }
+  if (derivedRisk === "low" && maxConfidence >= 0.45) {
     derivedRisk = "medium";
     calibrated = Math.max(calibrated, 40);
   }
-  if (derivedRisk !== "high" && maxConfidence >= 0.55) {
+  if (derivedRisk !== "high" && maxConfidence >= 0.65) {
     derivedRisk = "medium";
     calibrated = Math.max(calibrated, 45);
   }
@@ -171,7 +184,7 @@ export async function POST(request) {
                   "若看到正常餐饮元素，例如碗盘边缘、汤勺、杯子、桌面反光、酱汁油光、纸质照片边框、背景菜单牌，不要把它们当成餐盘异物。",
                   "请正确识别常见菜品：肉丸/菇类/青菜/云吞/面条/红烧或卤肉/整鱼/香菜/汤汁等。整鱼的鱼头、鱼骨、鱼尾通常属于菜品本身；只有登记鱼类过敏时才作为 allergen 风险提示。",
                   "过敏原和有害异物必须分别完整检查；即使已经发现过敏原，也继续检查玻璃、金属、硬塑料、头发、苍蝇/蟑螂等昆虫和包装残留。",
-                  "请保持风险分一致：low=0-34，medium=35-69，high=70-100。过敏原 confidence>=0.80 或有害异物 confidence>=0.75 时必须 high，不能仍给中风险。",
+                  "请保持风险分一致：low=0-34，medium=35-69，high=70-100。过敏原 confidence>=0.88 或明确有害异物 confidence>=0.82 时必须 high，不能仍给中风险。",
                 ].join("\n"),
               },
               { type: "image_url", image_url: { url: image } },
