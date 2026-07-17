@@ -13,6 +13,7 @@ const SYSTEM_PROMPT = `你是校园食堂的餐盘图像初筛助手。你的结
 也要避免把正常餐饮场景误报成异物：盘子/碗/勺子/杯子/桌面反光、酱汁油光、餐盘边缘、餐桌上的菜单牌或背景餐具，如果不在食物内部或没有明显污染食物，不应作为 foreign_object。
 常见菜品识别请更具体：肉丸、菇类、辣椒、葱花、青菜、云吞/馄饨、面条、红烧肉/卤肉、整鱼、鱼皮、鱼头、鱼尾、鱼骨、香菜、酱汁或汤汁都属于正常可见食物/配料。整鱼中的鱼头、鱼尾、鱼骨和鱼皮一般是菜品本身；只有发现非食物硬物、包装残留、头发、昆虫、金属或玻璃等才标为 foreign_object。
 如果画面像从相册、纸质照片或屏幕中拍摄的餐食图片，请仍然按可见餐食内容分析，但不要把纸张边框、屏幕反光、照片反光当作餐盘异物。
+score 必须和 risk 一致：low 通常 0-34，medium 通常 35-69，high 通常 70-100。只要返回 medium 或 high，就不要给 0-10 这种极低分。
 仅返回 JSON，不要 Markdown。坐标采用相对图片的百分比，x/y 为左上角，width/height 为宽高，均为 0-100。看不清时降低 confidence，不得编造。
 JSON 格式：{"risk":"low|medium|high","score":0,"summary":"中文摘要","foods":["食物"],"detections":[{"category":"allergen|foreign_object","label":"名称","description":"中文说明","confidence":0.0,"box":{"x":0,"y":0,"width":0,"height":0}}]}`;
 
@@ -52,14 +53,35 @@ function normalizeDetection(item) {
   };
 }
 
+function calibrateScore(risk, score, detections) {
+  let calibrated = clamp(score);
+  const allergenDetections = detections.filter((item) => item.category === "allergen");
+  const foreignDetections = detections.filter((item) => item.category === "foreign_object");
+  const maxConfidence = detections.reduce((max, item) => Math.max(max, Number(item.confidence) || 0), 0);
+
+  if (detections.length) calibrated = Math.max(calibrated, 12);
+  if (allergenDetections.length) calibrated = Math.max(calibrated, 28);
+  if (foreignDetections.length) calibrated = Math.max(calibrated, 45);
+  if (maxConfidence >= 0.8) calibrated = Math.max(calibrated, risk === "high" ? 72 : 42);
+  else if (maxConfidence >= 0.55) calibrated = Math.max(calibrated, 32);
+
+  if (risk === "medium") calibrated = Math.max(calibrated, 35);
+  if (risk === "high") calibrated = Math.max(calibrated, 70);
+  if (risk === "low") calibrated = Math.min(calibrated, 34);
+
+  return Math.round(clamp(calibrated));
+}
+
 function normalize(result) {
   const detections = Array.isArray(result.detections) ? result.detections.slice(0, 12) : [];
+  const normalizedDetections = detections.map(normalizeDetection);
+  const risk = ["low", "medium", "high"].includes(result.risk) ? result.risk : "medium";
   return {
-    risk: ["low", "medium", "high"].includes(result.risk) ? result.risk : "medium",
-    score: clamp(result.score),
+    risk,
+    score: calibrateScore(risk, result.score, normalizedDetections),
     summary: String(result.summary || "分析完成，请人工复核。").slice(0, 500),
     foods: Array.isArray(result.foods) ? result.foods.map(String).slice(0, 30) : [],
-    detections: detections.map(normalizeDetection),
+    detections: normalizedDetections,
   };
 }
 
@@ -116,6 +138,7 @@ export async function POST(request) {
                   "请用常识复核结果：若透明/反光物位于米饭、热菜、汤菜中，不要标为冰块；应作为疑似透明异物处理，并提醒人工确认是否为玻璃、塑料或其他异物。",
                   "若看到正常餐饮元素，例如碗盘边缘、汤勺、杯子、桌面反光、酱汁油光、纸质照片边框、背景菜单牌，不要把它们当成餐盘异物。",
                   "请正确识别常见菜品：肉丸/菇类/青菜/云吞/面条/红烧或卤肉/整鱼/香菜/汤汁等。整鱼的鱼头、鱼骨、鱼尾通常属于菜品本身；只有登记鱼类过敏时才作为 allergen 风险提示。",
+                  "请保持风险分一致：low=0-34，medium=35-69，high=70-100；如果发现过敏原风险且标为中风险，score 至少应为 35。",
                 ].join("\n"),
               },
               { type: "image_url", image_url: { url: image } },
