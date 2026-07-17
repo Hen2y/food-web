@@ -577,6 +577,8 @@
     .upload-zone.auto-live #autoVideo{display:block}
     .upload-zone.auto-live:not(.auto-review) #previewImage{display:none!important}
     .upload-zone.auto-live.auto-review #previewImage{display:block;z-index:3}
+    .upload-zone.has-image:not(.auto-live) #previewImage{display:block;z-index:3}
+    .upload-zone.has-image:not(.auto-live) #autoVideo{display:none!important}
     .upload-zone.auto-live .upload-placeholder{display:none}
     .upload-zone.auto-live .scan-frame{display:block}
     .auto-banner{
@@ -2235,6 +2237,9 @@ function stopManualCamera(){
   if(video){
     video.pause();
     video.srcObject = null;
+    video.style.display = "";
+    video.style.visibility = "";
+    video.style.opacity = "";
   }
   const zone = document.getElementById("uploadZone");
   if(zone) zone.classList.remove("manual-camera-live");
@@ -2483,6 +2488,15 @@ function getCameraErrorMessage(error){
 function setPreview(src){
   const zone = document.getElementById("uploadZone");
   const img = document.getElementById("previewImage");
+  const video = document.getElementById("autoVideo");
+  if(!autoState.enabled){
+    video.pause();
+    video.srcObject = null;
+    video.style.display = "";
+    video.style.visibility = "";
+    video.style.opacity = "";
+    zone.classList.remove("manual-camera-live", "auto-review");
+  }
   document.getElementById("uploadPlaceholder").style.display = "none";
   img.src = src;
   img.style.display = "block";
