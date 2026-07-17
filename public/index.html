@@ -1882,6 +1882,17 @@ function waitForVideoReady(video){
   });
 }
 
+function getCameraErrorMessage(error){
+  const name = error?.name || "";
+  const message = error?.message || "";
+  if(!navigator.mediaDevices?.getUserMedia) return "当前浏览器或页面环境不支持摄像头。请使用 HTTPS 的 Safari/Chrome 打开 Render 网站。";
+  if(name === "NotAllowedError" || name === "SecurityError") return "摄像头权限被拒绝。请在浏览器地址栏/系统设置里允许此网站使用相机。";
+  if(name === "NotFoundError" || name === "DevicesNotFoundError") return "没有找到可用摄像头。请确认摄像头未被其他应用占用。";
+  if(name === "NotReadableError" || name === "TrackStartError") return "摄像头被其他应用占用，或系统暂时无法读取摄像头。请关闭其它使用摄像头的软件后重试。";
+  if(name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") return "摄像头不支持当前画面设置，已建议刷新页面后重试。";
+  return message || "摄像头开启失败，请检查浏览器权限";
+}
+
 function setPreview(src){
   const zone = document.getElementById("uploadZone");
   const img = document.getElementById("previewImage");
@@ -1967,8 +1978,9 @@ async function startAutoMode(){
   }
   prepareAutoProjectionWaiting();
   try{
+    if(!navigator.mediaDevices?.getUserMedia) throw new Error("当前浏览器或页面环境不支持摄像头。请使用 HTTPS 的 Safari/Chrome 打开 Render 网站。");
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 960 }, height: { ideal: 540 } },
       audio: false
     });
     autoState.enabled = true;
@@ -1993,8 +2005,8 @@ async function startAutoMode(){
     video.muted = true;
     video.playsInline = true;
     updateAutoStatus("waitingPlate", "摄像头已打开，正在载入实时预览...");
-    await waitForVideoReady(video);
     await video.play();
+    await waitForVideoReady(video);
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
     document.getElementById("autoConfirmBtn").style.display = "none";
@@ -2015,8 +2027,9 @@ async function startAutoMode(){
     document.getElementById("uploadZone").classList.remove("auto-live", "auto-review");
     document.getElementById("autoStartBtn").disabled = false;
     document.getElementById("autoStopBtn").disabled = true;
-    showToast("无法打开摄像头，请检查浏览器权限");
-    updateAutoStatus("danger", error.message || "摄像头开启失败，请允许浏览器使用相机");
+    const cameraMessage = getCameraErrorMessage(error);
+    showToast(cameraMessage);
+    updateAutoStatus("danger", cameraMessage);
   }
 }
 
