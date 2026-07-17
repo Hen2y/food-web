@@ -1690,6 +1690,7 @@
                     <span class="zoom-value" id="imageZoomValue">100%</span>
                   </div>
                   <div class="editor-buttons">
+                    <button class="btn btn-primary" type="button" onclick="event.stopPropagation(); retakeManualPhoto();">拍下一张</button>
                     <button class="btn btn-ghost" type="button" onclick="event.stopPropagation(); resetManualImageEdit();">重置图片</button>
                   </div>
                 </div>
@@ -2409,6 +2410,35 @@ function resetManualImageEdit(){
   if(zoom) zoom.value = "100";
   updateManualImageEditorUI();
   scheduleManualImageEdit();
+}
+
+function clearManualPhotoForRetake(){
+  stopManualCamera();
+  resetManualImageEditor("", false);
+  state.image = "";
+  state.analyzed = false;
+  state.risk = "low";
+  state.score = 0;
+  state.summary = "尚未提交 AI 检测。";
+  state.alerts = [];
+  state.detections = [];
+  const zone = document.getElementById("uploadZone");
+  const img = document.getElementById("previewImage");
+  zone.classList.remove("has-image", "analyzed", "auto-review");
+  document.getElementById("bboxLayer").innerHTML = "";
+  img.style.display = "none";
+  img.src = "";
+  img.removeAttribute("src");
+  document.getElementById("uploadPlaceholder").style.display = "";
+  renderResults();
+  renderDashboard();
+  syncState();
+}
+
+function retakeManualPhoto(){
+  if(autoState.enabled) return;
+  clearManualPhotoForRetake();
+  openCameraPicker();
 }
 
 function setCustomerProjectionDisabled(disabled){
