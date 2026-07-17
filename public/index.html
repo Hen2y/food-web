@@ -1653,6 +1653,7 @@ const state = {
 };
 let recordImageStore = [];
 let customerProjectionWindow = null;
+let analysisRequestSeq = 0;
 const manualImageEditor = {
   source: "",
   rotation: 0,
@@ -1980,6 +1981,12 @@ function prepareAutoProjectionWaiting(){
 }
 
 async function analyzePlate(options = {}){
+  const isAutoRequest = Boolean(options.noSample);
+  if(!isAutoRequest && autoState.enabled){
+    stopAutoMode();
+    showToast("已关闭自动模式，避免后台请求覆盖手动结果");
+  }
+  const requestId = ++analysisRequestSeq;
   if(!state.image){
     if(options.noSample) return {ok:false, error:"没有可分析的图片"};
     loadSample();
@@ -2000,6 +2007,9 @@ async function analyzePlate(options = {}){
     });
     const result = await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(result.error || "AI 分析失败");
+    if(requestId !== analysisRequestSeq){
+      return {ok:false, stale:true, error:"已有新的分析结果，本次旧请求已忽略"};
+    }
     state.analyzed = true;
     state.risk = result.risk;
     state.score = Math.round(result.score || 0);
@@ -2021,12 +2031,16 @@ async function analyzePlate(options = {}){
     return {ok:true, score:state.score, risk:state.risk};
   }catch(error){
     const message = error.message || "AI 分析失败，请重试";
-    renderAnalysisError(message);
+    const stale = requestId !== analysisRequestSeq;
+    const shouldPreserveExistingResult = stale || isAutoRequest || state.analyzed;
+    if(!shouldPreserveExistingResult){
+      renderAnalysisError(message);
+    }
     if(autoState.enabled && isQuotaOrRateLimitError(message)){
       showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式将暂停，避免继续扣费。", "!");
     }
-    showToast(message);
-    return {ok:false, error:message};
+    showToast(shouldPreserveExistingResult ? `后台请求失败，已保留当前结果：${message}` : message);
+    return {ok:false, error:message, stale};
   }finally{
     btn.disabled = false;
     spinner.style.display = "none";
