@@ -1674,11 +1674,10 @@ const autoState = {
   clearMs: 1600,
   cooldownMs: 12000,
   apiCooldownMs: 15000,
-  maxSameSceneWaitMs: 8000,
   mealPresenceThreshold: 45,
   centerFoodThreshold: 14,
   minFoodLikeRatio: 0.04,
-  minFrameChange: 14,
+  minFrameChange: 7,
   stableSince: 0,
   clearSince: 0,
   waitNextSince: 0,
@@ -1957,6 +1956,7 @@ function getCameraErrorMessage(error){
   if(name === "NotFoundError" || name === "DevicesNotFoundError") return "没有找到可用摄像头。请确认摄像头未被其他应用占用。";
   if(name === "NotReadableError" || name === "TrackStartError") return "摄像头被其他应用占用，或系统暂时无法读取摄像头。请关闭其它使用摄像头的软件后重试。";
   if(name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") return "摄像头不支持当前画面设置，已建议刷新页面后重试。";
+  if(/黑色画面|没有输出|无法输出/.test(message)) return "摄像头已授权但没有正常画面。请关闭 FaceTime/微信等占用相机的软件，然后关闭自动模式并重新开启。";
   return message || "摄像头开启失败，请检查浏览器权限";
 }
 
@@ -2078,6 +2078,103 @@ async function analyzePlate(options = {}){
   }
 }
 
+function nextPaint(){
+  return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+}
+
+function delay(ms){
+  return new Promise(resolve=>setTimeout(resolve, ms));
+}
+
+async function attachCameraStream(video, stream, options = {}){
+  video.muted = true;
+  video.playsInline = true;
+  video.setAttribute("muted", "");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("autoplay", "");
+  video.style.display = "block";
+  video.style.visibility = "visible";
+  video.style.opacity = "1";
+  if(options.forceRebind || video.srcObject !== stream){
+    video.pause();
+    video.srcObject = null;
+    await nextPaint();
+    video.srcObject = stream;
+  }
+  await video.play();
+  await waitForVideoReady(video);
+}
+
+async function verifyCameraFrame(video){
+  const startTime = Number(video.currentTime) || 0;
+  await delay(650);
+  if(video.paused || video.readyState < 2 || !video.videoWidth || !video.videoHeight){
+    throw new Error("摄像头没有输出可播放画面");
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 40;
+  canvas.height = 30;
+  const context = canvas.getContext("2d", {willReadFrequently:true});
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let sum = 0;
+  let sumSquares = 0;
+  const count = pixels.length / 4;
+  for(let index=0; index<pixels.length; index+=4){
+    const luminance = (pixels[index] + pixels[index+1] + pixels[index+2]) / 3;
+    sum += luminance;
+    sumSquares += luminance * luminance;
+  }
+  const mean = count ? sum / count : 0;
+  const variance = count ? Math.max(0, sumSquares / count - mean * mean) : 0;
+  const timeAdvanced = Number(video.currentTime) > startTime + .02;
+  if(!timeAdvanced || (mean < 1.5 && variance < .5)){
+    throw new Error("摄像头返回了黑色画面");
+  }
+}
+
+async function openAutoCameraStream(video){
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) < 900);
+  const attempts = mobile ? [
+    {video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:{facingMode:{ideal:"user"},width:{ideal:960},height:{ideal:540}},audio:false},
+    {video:true,audio:false}
+  ] : [
+    {video:{width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:true,audio:false}
+  ];
+  let lastError = null;
+  for(const constraints of attempts){
+    let stream = null;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      await attachCameraStream(video, stream, {forceRebind:true});
+      await verifyCameraFrame(video);
+      return stream;
+    }catch(error){
+      lastError = error;
+      if(stream) stream.getTracks().forEach(track=>track.stop());
+      video.pause();
+      video.srcObject = null;
+    }
+  }
+  throw lastError || new Error("摄像头无法输出画面");
+}
+
+function clearAutoReviewOverlay(){
+  const img = document.getElementById("previewImage");
+  const zone = document.getElementById("uploadZone");
+  state.image = "";
+  state.analyzed = false;
+  state.detections = [];
+  zone.classList.remove("has-image", "analyzed", "auto-review");
+  img.style.display = "none";
+  img.src = "";
+  img.removeAttribute("src");
+  document.getElementById("bboxLayer").innerHTML = "";
+  hideAutoBanner();
+}
+
 async function startAutoMode(){
   if(autoState.enabled) return;
   const threshold = Number(document.getElementById("autoThreshold").value);
@@ -2091,12 +2188,14 @@ async function startAutoMode(){
     return;
   }
   prepareAutoProjectionWaiting();
+  let stream = null;
   try{
     if(!navigator.mediaDevices?.getUserMedia) throw new Error("当前浏览器或页面环境不支持摄像头。请使用 HTTPS 的 Safari/Chrome 打开 Render 网站。");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" }, width: { ideal: 960 }, height: { ideal: 540 } },
-      audio: false
-    });
+    const video = document.getElementById("autoVideo");
+    const zone = document.getElementById("uploadZone");
+    zone.classList.add("auto-live");
+    updateAutoStatus("waitingPlate", "正在连接摄像头并检查实时画面...");
+    stream = await openAutoCameraStream(video);
     autoState.enabled = true;
     autoState.stream = stream;
     autoState.threshold = threshold;
@@ -2110,17 +2209,9 @@ async function startAutoMode(){
     autoState.busy = false;
     if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
     autoState.resultTimer = null;
-    const video = document.getElementById("autoVideo");
-    const zone = document.getElementById("uploadZone");
-    await restoreAutoLiveView();
+    clearAutoReviewOverlay();
     zone.classList.add("auto-live");
     setCustomerProjectionDisabled(true);
-    video.srcObject = stream;
-    video.muted = true;
-    video.playsInline = true;
-    updateAutoStatus("waitingPlate", "摄像头已打开，正在载入实时预览...");
-    await video.play();
-    await waitForVideoReady(video);
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
     document.getElementById("autoConfirmBtn").style.display = "none";
@@ -2128,9 +2219,8 @@ async function startAutoMode(){
     updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，额度保护已开启，等待餐盘进入画面`);
     autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
   }catch(error){
-    if(autoState.stream){
-      autoState.stream.getTracks().forEach(track=>track.stop());
-    }
+    if(stream) stream.getTracks().forEach(track=>track.stop());
+    if(autoState.stream && autoState.stream !== stream) autoState.stream.getTracks().forEach(track=>track.stop());
     autoState.enabled = false;
     autoState.stream = null;
     if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
@@ -2180,7 +2270,8 @@ function stopAutoMode(){
 async function confirmAutoRisk(){
   if(!autoState.enabled) return;
   document.getElementById("autoConfirmBtn").style.display = "none";
-  await restoreAutoLiveView();
+  const restored = await restoreAutoLiveView();
+  if(!restored) return;
   beginWaitingNextPlate("已人工确认。请换上下一份餐盘，画面变化后会自动继续。");
 }
 
@@ -2256,7 +2347,7 @@ function getAutoFrameMetrics(){
   }
   for(let gy=0; gy<6; gy++){
     for(let gx=0; gx<8; gx++){
-      let sum = 0, count = 0;
+      let sumR = 0, sumG = 0, sumB = 0, count = 0;
       const x0 = Math.floor((gx * width) / 8);
       const x1 = Math.floor(((gx + 1) * width) / 8);
       const y0 = Math.floor((gy * height) / 6);
@@ -2264,11 +2355,17 @@ function getAutoFrameMetrics(){
       for(let y=y0; y<y1; y++){
         for(let x=x0; x<x1; x++){
           const idx = (y * width + x) * 4;
-          sum += (data[idx] + data[idx+1] + data[idx+2]) / 3;
+          sumR += data[idx];
+          sumG += data[idx+1];
+          sumB += data[idx+2];
           count++;
         }
       }
-      signature.push(count ? Math.round(sum / count) : 0);
+      signature.push(
+        count ? Math.round(sumR / count) : 0,
+        count ? Math.round(sumG / count) : 0,
+        count ? Math.round(sumB / count) : 0
+      );
     }
   }
   const presenceScore = Math.round(Math.min(100, (colorful/total)*95 + (foodLike/total)*80 + (contrast/total)*40 + (bright/total)*10));
@@ -2315,11 +2412,11 @@ async function monitorAutoFrame(){
       }else{
         updateAutoStatus("waitingClear", "正在切换到下一轮");
       }
-    }else if(waited >= autoState.cooldownMs && (changed >= autoState.minFrameChange || waited >= autoState.maxSameSceneWaitMs)){
+    }else if(waited >= autoState.cooldownMs && changed >= autoState.minFrameChange){
       autoState.phase = "waitingPlate";
       autoState.stableSince = now;
       autoState.clearSince = 0;
-      updateAutoStatus("waitingPlate", changed >= autoState.minFrameChange ? "检测到画面变化，正在确认下一份餐盘" : "已进入下一轮，请保持餐盘稳定");
+      updateAutoStatus("waitingPlate", "检测到新的餐盘画面，正在确认稳定性");
     }else{
       autoState.clearSince = 0;
       const seconds = Math.max(0, Math.ceil((autoState.cooldownMs - waited)/1000));
@@ -2344,39 +2441,25 @@ function captureAutoImage(){
 
 async function restoreAutoLiveView(){
   const video = document.getElementById("autoVideo");
-  const img = document.getElementById("previewImage");
   const zone = document.getElementById("uploadZone");
-  state.image = "";
-  state.analyzed = false;
-  state.detections = [];
-  zone.classList.remove("has-image", "analyzed", "auto-review");
-  img.style.display = "none";
-  img.src = "";
-  img.removeAttribute("src");
-  document.getElementById("bboxLayer").innerHTML = "";
-  hideAutoBanner();
+  clearAutoReviewOverlay();
   if(autoState.enabled){
     zone.classList.add("auto-live");
-    video.style.display = "block";
-    video.style.visibility = "visible";
-    video.style.opacity = "1";
-    if(autoState.stream){
-      video.pause();
-      video.srcObject = null;
-      // Safari 在静态结果图覆盖 video 一段时间后，偶尔不会自动重绘旧的
-      // MediaStream。跨两个绘制帧后重新绑定同一条流，可强制恢复实时画面。
-      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-      video.srcObject = autoState.stream;
-    }
     try{
-      await video.play();
-      if(!video.videoWidth || !video.videoHeight) await waitForVideoReady(video);
+      await attachCameraStream(video, autoState.stream, {forceRebind:true});
+      await verifyCameraFrame(video);
     }catch(error){
-      updateAutoStatus("danger", getCameraErrorMessage(error));
+      const message = getCameraErrorMessage(error);
+      autoState.phase = "pausedCamera";
+      autoState.busy = false;
+      showAutoBanner("danger", "相机预览恢复失败", message, "!");
+      updateAutoStatus("danger", message);
+      return false;
     }
   }
   document.getElementById("analyzeBtnText").textContent = "提交 AI 讀取";
   syncState();
+  return true;
 }
 
 async function captureAndAnalyzeAuto(){
@@ -2388,7 +2471,7 @@ async function captureAndAnalyzeAuto(){
     autoState.busy = false;
     autoState.waitNextSince = now;
     updateAutoStatus("waitingClear", `为避免 API 限流，自动模式冷却 ${waitSeconds} 秒后再识别`);
-    showAutoBanner("warn", "正在保护 API 额度", `冷却 ${waitSeconds} 秒，避免触发 quota exceeded`, waitSeconds);
+    showAutoBanner("warn", "正在保护 API 额度", `冷却 ${waitSeconds} 秒，避免请求过于频繁`, waitSeconds);
     setTimeout(()=>{
       if(!autoState.enabled || autoState.busy) return;
       hideAutoBanner();
@@ -2418,11 +2501,12 @@ async function captureAndAnalyzeAuto(){
       await restoreAutoLiveView();
       autoState.phase = "pausedQuota";
       autoState.busy = false;
-      showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式已暂停，避免继续扣费。请稍后关闭再重新开启。", "!");
-      updateAutoStatus("danger", "Kimi API 额度或频率限制，自动模式已暂停，避免继续请求");
+      showAutoBanner("danger", "AI 服务暂时繁忙", "自动模式已暂停，不会继续发送请求。请等待一分钟后关闭并重新开启自动模式。", "!");
+      updateAutoStatus("danger", "AI 请求暂时受限，自动模式已暂停且不会继续请求");
       return;
     }
-    await restoreAutoLiveView();
+    const restored = await restoreAutoLiveView();
+    if(!restored) return;
     beginWaitingNextPlate("本次识别失败。请调整餐盘或换下一盘，冷却后会重试。");
     updateAutoStatus("danger", "本次识别失败，请调整餐盘或换下一盘后重试");
     return;
@@ -2444,7 +2528,8 @@ async function captureAndAnalyzeAuto(){
       if(remaining <= 0){
         clearInterval(autoState.resultTimer);
         autoState.resultTimer = null;
-        await restoreAutoLiveView();
+        const restored = await restoreAutoLiveView();
+        if(!restored) return;
         beginWaitingNextPlate("本盘已自动通过，已恢复相机预览。请换上下一份餐盘。");
         return;
       }
