@@ -1670,7 +1670,8 @@ const autoState = {
   stableMs: 4000,
   resultMs: 5000,
   clearMs: 1600,
-  cooldownMs: 1800,
+  cooldownMs: 12000,
+  apiCooldownMs: 15000,
   maxSameSceneWaitMs: 8000,
   mealPresenceThreshold: 45,
   centerFoodThreshold: 14,
@@ -1682,7 +1683,8 @@ const autoState = {
   busy: false,
   lastPresenceScore: 0,
   lastCaptureSignature: null,
-  currentSignature: null
+  currentSignature: null,
+  lastAnalyzeAt: 0
 };
 
 const pageInfo = {
@@ -1910,6 +1912,10 @@ function showAutoBanner(kind, title, text, countdown = ""){
 function hideAutoBanner(){
   const banner = document.getElementById("autoResultBanner");
   if(banner) banner.className = "auto-banner";
+}
+
+function isQuotaOrRateLimitError(message){
+  return /quota|exceeded|额度|余额|用完|限流|频繁|rate|too many|429/i.test(String(message || ""));
 }
 
 function waitForVideoReady(video){
@@ -2303,6 +2309,25 @@ function restoreAutoLiveView(){
 }
 
 async function captureAndAnalyzeAuto(){
+  const now = Date.now();
+  const sinceLastAnalyze = now - (autoState.lastAnalyzeAt || 0);
+  if(autoState.lastAnalyzeAt && sinceLastAnalyze < autoState.apiCooldownMs){
+    const waitSeconds = Math.ceil((autoState.apiCooldownMs - sinceLastAnalyze) / 1000);
+    autoState.phase = "waitingNext";
+    autoState.busy = false;
+    autoState.waitNextSince = now;
+    updateAutoStatus("waitingClear", `为避免 API 限流，自动模式冷却 ${waitSeconds} 秒后再识别`);
+    showAutoBanner("warn", "正在保护 API 额度", `冷却 ${waitSeconds} 秒，避免触发 quota exceeded`, waitSeconds);
+    setTimeout(()=>{
+      if(!autoState.enabled || autoState.busy) return;
+      hideAutoBanner();
+      autoState.phase = "waitingPlate";
+      autoState.stableSince = 0;
+      updateAutoStatus("waitingPlate", "冷却结束，等待餐盘稳定后继续识别");
+    }, autoState.apiCooldownMs - sinceLastAnalyze);
+    return;
+  }
+
   autoState.busy = true;
   autoState.phase = "capturing";
   updateAutoStatus("capturing", "已自动拍照，AI 正在识别风险");
@@ -2311,13 +2336,23 @@ async function captureAndAnalyzeAuto(){
   state.image = captureAutoImage();
   setPreview(state.image);
   document.getElementById("uploadZone").classList.add("auto-live", "auto-review");
+  autoState.lastAnalyzeAt = Date.now();
   const result = await analyzePlate({noSample:true});
   if(!autoState.enabled){
     autoState.busy = false;
     return;
   }
   if(!result.ok){
-    beginWaitingNextPlate("本次识别失败。请调整餐盘或换下一盘，画面变化后会重试。");
+    if(isQuotaOrRateLimitError(result.error)){
+      restoreAutoLiveView();
+      autoState.phase = "pausedQuota";
+      autoState.busy = false;
+      showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式已暂停，避免继续扣费。请稍后关闭再重新开启。", "!");
+      updateAutoStatus("danger", "Kimi API 额度或频率限制，自动模式已暂停，避免继续请求");
+      return;
+    }
+    restoreAutoLiveView();
+    beginWaitingNextPlate("本次识别失败。请调整餐盘或换下一盘，冷却后会重试。");
     updateAutoStatus("danger", "本次识别失败，请调整餐盘或换下一盘后重试");
     return;
   }
