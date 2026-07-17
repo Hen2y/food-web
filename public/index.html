@@ -2862,13 +2862,68 @@ function deleteProfile(id){
   renderProfiles(); syncState(); showToast("档案已删除");
 }
 
+function cloneRecordForStorage(record){
+  return {
+    ...record,
+    image: "",
+    imageData: ""
+  };
+}
+
+function buildOperatorStorageState(){
+  return {
+    ...state,
+    image: "",
+    detections: [],
+    records: (state.records || []).slice(0, 50).map(cloneRecordForStorage)
+  };
+}
+
+function buildCustomerStorageState(){
+  return {
+    dataVersion: state.dataVersion,
+    image: state.image || "",
+    analyzed: state.analyzed,
+    risk: state.risk,
+    score: state.score,
+    person: state.person,
+    summary: state.summary,
+    alerts: Array.isArray(state.alerts) ? state.alerts : [],
+    detections: Array.isArray(state.detections) ? state.detections : [],
+    profiles: Array.isArray(state.profiles) ? state.profiles : []
+  };
+}
+
+function safeSetStorage(key, value){
+  try{
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  }catch(error){
+    if(error?.name === "QuotaExceededError" || /quota/i.test(error?.message || "")){
+      try{
+        localStorage.removeItem("safeplate_saas_state");
+        localStorage.removeItem("safeplate_customer_state");
+        localStorage.setItem(key, JSON.stringify(value));
+        return true;
+      }catch(e){}
+    }
+    return false;
+  }
+}
+
 function syncState(){
-  localStorage.setItem("safeplate_saas_state", JSON.stringify(state));
+  safeSetStorage("safeplate_saas_state", buildOperatorStorageState());
+  const customerState = buildCustomerStorageState();
+  if(!safeSetStorage("safeplate_customer_state", customerState)){
+    safeSetStorage("safeplate_customer_state", {...customerState, image:""});
+  }
   updateCustomerScreen();
 }
 
 function getSyncedState(){
   try{
+    const customerSaved = JSON.parse(localStorage.getItem("safeplate_customer_state"));
+    if(location.hash === "#customer" && customerSaved) return customerSaved;
     const saved = JSON.parse(localStorage.getItem("safeplate_saas_state"));
     if(!saved) return state;
     if((saved.dataVersion || 0) < state.dataVersion){
@@ -2997,6 +3052,7 @@ async function loadSample(){
 
 function resetDemo(){
   localStorage.removeItem("safeplate_saas_state");
+  localStorage.removeItem("safeplate_customer_state");
   location.reload();
 }
 
@@ -3048,6 +3104,7 @@ async function initMode(){
   renderDashboardResult();
   await loadDatabaseRecords({silent:true});
   renderProfiles();
+  syncState();
 }
 
 initMode();
