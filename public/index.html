@@ -466,7 +466,7 @@
       position:absolute;
       inset:0;
       background:#101827;
-      z-index:1;
+      z-index:2;
     }
     .upload-zone.auto-live{
       border-style:solid;
@@ -475,9 +475,41 @@
     }
     .upload-zone.auto-live #autoVideo{display:block}
     .upload-zone.auto-live:not(.auto-review) #previewImage{display:none!important}
-    .upload-zone.auto-live.auto-review #previewImage{display:block}
+    .upload-zone.auto-live.auto-review #previewImage{display:block;z-index:3}
     .upload-zone.auto-live .upload-placeholder{display:none}
     .upload-zone.auto-live .scan-frame{display:block}
+    .auto-banner{
+      display:none;
+      position:absolute;
+      top:18px;
+      left:18px;
+      right:18px;
+      z-index:6;
+      border-radius:20px;
+      padding:15px 16px;
+      color:#fff;
+      background:linear-gradient(135deg,rgba(21,167,121,.95),rgba(47,120,214,.90));
+      box-shadow:0 18px 46px rgba(0,0,0,.24);
+      backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,.24);
+    }
+    .upload-zone.auto-live .auto-banner.show{display:flex;align-items:center;justify-content:space-between;gap:14px}
+    .auto-banner strong{display:block;font-size:18px;margin-bottom:4px}
+    .auto-banner span{display:block;font-size:13px;color:rgba(255,255,255,.86);line-height:1.45}
+    .auto-countdown{
+      width:58px;
+      height:58px;
+      border-radius:20px;
+      display:grid;
+      place-items:center;
+      background:rgba(255,255,255,.18);
+      border:1px solid rgba(255,255,255,.24);
+      font-size:28px;
+      font-weight:950;
+      flex:0 0 auto;
+    }
+    .auto-banner.warn{background:linear-gradient(135deg,#f0a429,#e86f39)}
+    .auto-banner.danger{background:linear-gradient(135deg,#df4f4f,#a62f5e)}
     .auto-hud{
       display:none;
       position:absolute;
@@ -1345,6 +1377,13 @@
                 <img id="previewImage" alt="餐盤照片預覽" />
                 <div class="scan-frame"></div>
                 <div class="bbox-layer" id="bboxLayer"></div>
+                <div class="auto-banner" id="autoResultBanner">
+                  <div>
+                    <strong id="autoBannerTitle">自动模式提示</strong>
+                    <span id="autoBannerText">等待识别结果</span>
+                  </div>
+                  <div class="auto-countdown" id="autoCountdown">5</div>
+                </div>
                 <div class="auto-hud" id="autoHud">
                   <div style="display:flex;align-items:center;gap:12px;">
                     <div class="auto-dot" id="autoHudDot"></div>
@@ -1396,7 +1435,7 @@
                   <div class="select-row">
                     <div class="field">
                       <label>自动模式风险阈值</label>
-                      <input id="autoThreshold" type="number" min="0" max="100" value="60" placeholder="例如：60" />
+                      <input id="autoThreshold" type="number" min="0" max="100" value="50" placeholder="例如：50" />
                     </div>
                     <div class="field">
                       <label>餐盘稳定秒数</label>
@@ -1627,7 +1666,7 @@ const autoState = {
   monitorTimer: null,
   resultTimer: null,
   phase: "off",
-  threshold: 60,
+  threshold: 50,
   stableMs: 4000,
   resultMs: 5000,
   clearMs: 1600,
@@ -1853,6 +1892,26 @@ function setCustomerProjectionDisabled(disabled){
   });
 }
 
+function showAutoBanner(kind, title, text, countdown = ""){
+  const banner = document.getElementById("autoResultBanner");
+  const titleEl = document.getElementById("autoBannerTitle");
+  const textEl = document.getElementById("autoBannerText");
+  const countdownEl = document.getElementById("autoCountdown");
+  if(!banner) return;
+  banner.className = "auto-banner show";
+  if(kind === "warn") banner.classList.add("warn");
+  if(kind === "danger") banner.classList.add("danger");
+  titleEl.textContent = title;
+  textEl.textContent = text;
+  countdownEl.textContent = countdown;
+  countdownEl.style.display = countdown === "" ? "none" : "grid";
+}
+
+function hideAutoBanner(){
+  const banner = document.getElementById("autoResultBanner");
+  if(banner) banner.className = "auto-banner";
+}
+
 function waitForVideoReady(video){
   return new Promise((resolve,reject)=>{
     if(video.readyState >= 2 && video.videoWidth && video.videoHeight) return resolve();
@@ -2052,6 +2111,7 @@ function stopAutoMode(){
   document.getElementById("autoStartBtn").disabled = false;
   document.getElementById("autoStopBtn").disabled = true;
   document.getElementById("autoConfirmBtn").style.display = "none";
+  hideAutoBanner();
   setCustomerProjectionDisabled(false);
   updateAutoStatus("off", "自动模式未开启");
 }
@@ -2236,6 +2296,7 @@ function restoreAutoLiveView(){
     if(video.srcObject && video.paused) video.play().catch(()=>{});
   }
   document.getElementById("bboxLayer").innerHTML = "";
+  hideAutoBanner();
   zone.classList.remove("has-image", "analyzed", "auto-review");
   document.getElementById("analyzeBtnText").textContent = "提交 AI 讀取";
   syncState();
@@ -2262,19 +2323,36 @@ async function captureAndAnalyzeAuto(){
   }
   if(state.score < autoState.threshold){
     autoState.phase = "showingLow";
-    updateAutoStatus("showingLow", `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${Math.round(autoState.resultMs/1000)} 秒后等待下一盘`);
     if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
-    autoState.resultTimer = setTimeout(()=>{
-      autoState.resultTimer = null;
-      if(!autoState.enabled) return;
-      restoreAutoLiveView();
-      beginWaitingNextPlate("本盘已自动通过，已恢复相机预览。请换上下一份餐盘。");
-    }, autoState.resultMs);
+    let remaining = Math.max(1, Math.ceil(autoState.resultMs / 1000));
+    const lowText = `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${remaining} 秒后恢复相机预览`;
+    showAutoBanner("safe", "识别完成：低于风险阈值", lowText, remaining);
+    updateAutoStatus("showingLow", lowText);
+    autoState.resultTimer = setInterval(()=>{
+      remaining -= 1;
+      if(!autoState.enabled){
+        clearInterval(autoState.resultTimer);
+        autoState.resultTimer = null;
+        return;
+      }
+      if(remaining <= 0){
+        clearInterval(autoState.resultTimer);
+        autoState.resultTimer = null;
+        restoreAutoLiveView();
+        beginWaitingNextPlate("本盘已自动通过，已恢复相机预览。请换上下一份餐盘。");
+        return;
+      }
+      const message = `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${remaining} 秒后恢复相机预览`;
+      showAutoBanner("safe", "识别完成：低于风险阈值", message, remaining);
+      updateAutoStatus("showingLow", message);
+    }, 1000);
   }else{
     autoState.phase = "needsConfirm";
     autoState.busy = false;
     document.getElementById("autoConfirmBtn").style.display = "inline-flex";
-    updateAutoStatus("needsConfirm", `风险分 ${state.score} 达到阈值 ${autoState.threshold}，请人工确认后继续`);
+    const highMessage = `风险分 ${state.score} 达到阈值 ${autoState.threshold}，请人工确认后继续`;
+    showAutoBanner("danger", "识别完成：需要人工确认", highMessage, "!");
+    updateAutoStatus("needsConfirm", highMessage);
   }
 }
 
