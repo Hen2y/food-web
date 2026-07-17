@@ -1654,6 +1654,7 @@ const state = {
 let recordImageStore = [];
 let customerProjectionWindow = null;
 let analysisRequestSeq = 0;
+let activeAnalysisRequest = null;
 const manualImageEditor = {
   source: "",
   rotation: 0,
@@ -1984,14 +1985,14 @@ async function analyzePlate(options = {}){
   const isAutoRequest = Boolean(options.noSample);
   if(!isAutoRequest && autoState.enabled){
     stopAutoMode();
-    showToast("已关闭自动模式，避免后台请求覆盖手动结果");
+  }
+  if(activeAnalysisRequest){
+    activeAnalysisRequest.controller.abort();
+    activeAnalysisRequest = null;
   }
   const requestId = ++analysisRequestSeq;
-  if(!state.image){
-    if(options.noSample) return {ok:false, error:"没有可分析的图片"};
-    await loadSample();
-    if(!state.image) return {ok:false, error:"示范餐盘加载失败"};
-  }
+  const controller = new AbortController();
+  activeAnalysisRequest = {id:requestId, controller, isAutoRequest};
   const btn = document.getElementById("analyzeBtn");
   const spinner = document.getElementById("analyzeSpinner");
   const text = document.getElementById("analyzeBtnText");
@@ -1999,12 +2000,31 @@ async function analyzePlate(options = {}){
   spinner.style.display = "inline-block";
   text.textContent = "AI 分析中...";
 
+  if(!state.image){
+    if(options.noSample){
+      activeAnalysisRequest = null;
+      btn.disabled = false;
+      spinner.style.display = "none";
+      text.textContent = "提交 AI 讀取";
+      return {ok:false, error:"没有可分析的图片"};
+    }
+    await loadSample();
+    if(!state.image){
+      activeAnalysisRequest = null;
+      btn.disabled = false;
+      spinner.style.display = "none";
+      text.textContent = "提交 AI 讀取";
+      return {ok:false, error:"示范餐盘加载失败"};
+    }
+  }
+
   try{
     const profile = getSelectedProfile();
     const response = await fetch("/api/analyze", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({image:state.image, allergens:profile ? profile.allergens : []})
+      body:JSON.stringify({image:state.image, allergens:profile ? profile.allergens : []}),
+      signal:controller.signal
     });
     const result = await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(result.error || "AI 分析失败");
@@ -2031,21 +2051,30 @@ async function analyzePlate(options = {}){
     showToast("AI 檢測完成，結果已同步");
     return {ok:true, score:state.score, risk:state.risk};
   }catch(error){
+    if(error?.name === "AbortError"){
+      return {ok:false, canceled:true, stale:true, error:"请求已取消"};
+    }
     const message = error.message || "AI 分析失败，请重试";
     const stale = requestId !== analysisRequestSeq;
-    const shouldPreserveExistingResult = stale || isAutoRequest || state.analyzed;
-    if(!shouldPreserveExistingResult){
+    if(stale){
+      return {ok:false, error:message, stale:true};
+    }
+    if(!isAutoRequest && !state.analyzed){
       renderAnalysisError(message);
     }
-    if(autoState.enabled && isQuotaOrRateLimitError(message)){
-      showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式将暂停，避免继续扣费。", "!");
+    // 自动模式由 captureAndAnalyzeAuto 统一处理错误，避免同一次失败重复弹提示。
+    // 已经存在成功结果时，只保留结果，不再让后台/旧请求的 quota 文案覆盖界面。
+    if(!isAutoRequest){
+      showToast(state.analyzed ? "重新识别失败，已保留上一次成功结果" : message);
     }
-    showToast(shouldPreserveExistingResult ? `后台请求失败，已保留当前结果：${message}` : message);
     return {ok:false, error:message, stale};
   }finally{
-    btn.disabled = false;
-    spinner.style.display = "none";
-    text.textContent = state.analyzed ? "重新提交 AI 讀取" : "提交 AI 讀取";
+    if(activeAnalysisRequest?.id === requestId) activeAnalysisRequest = null;
+    if(requestId === analysisRequestSeq){
+      btn.disabled = false;
+      spinner.style.display = "none";
+      text.textContent = state.analyzed ? "重新提交 AI 讀取" : "提交 AI 讀取";
+    }
   }
 }
 
@@ -2083,7 +2112,7 @@ async function startAutoMode(){
     autoState.resultTimer = null;
     const video = document.getElementById("autoVideo");
     const zone = document.getElementById("uploadZone");
-    restoreAutoLiveView();
+    await restoreAutoLiveView();
     zone.classList.add("auto-live");
     setCustomerProjectionDisabled(true);
     video.srcObject = stream;
@@ -2123,6 +2152,11 @@ function stopAutoMode(){
   autoState.enabled = false;
   autoState.phase = "off";
   autoState.busy = false;
+  if(activeAnalysisRequest?.isAutoRequest){
+    activeAnalysisRequest.controller.abort();
+    activeAnalysisRequest = null;
+    analysisRequestSeq += 1;
+  }
   if(autoState.monitorTimer) clearInterval(autoState.monitorTimer);
   autoState.monitorTimer = null;
   if(autoState.resultTimer) clearTimeout(autoState.resultTimer);
@@ -2143,10 +2177,10 @@ function stopAutoMode(){
   updateAutoStatus("off", "自动模式未开启");
 }
 
-function confirmAutoRisk(){
+async function confirmAutoRisk(){
   if(!autoState.enabled) return;
   document.getElementById("autoConfirmBtn").style.display = "none";
-  restoreAutoLiveView();
+  await restoreAutoLiveView();
   beginWaitingNextPlate("已人工确认。请换上下一份餐盘，画面变化后会自动继续。");
 }
 
@@ -2308,23 +2342,39 @@ function captureAutoImage(){
   return canvas.toDataURL("image/jpeg", .72);
 }
 
-function restoreAutoLiveView(){
+async function restoreAutoLiveView(){
   const video = document.getElementById("autoVideo");
   const img = document.getElementById("previewImage");
   const zone = document.getElementById("uploadZone");
   state.image = "";
   state.analyzed = false;
   state.detections = [];
+  zone.classList.remove("has-image", "analyzed", "auto-review");
   img.style.display = "none";
+  img.src = "";
   img.removeAttribute("src");
+  document.getElementById("bboxLayer").innerHTML = "";
+  hideAutoBanner();
   if(autoState.enabled){
     zone.classList.add("auto-live");
     video.style.display = "block";
-    if(video.srcObject && video.paused) video.play().catch(()=>{});
+    video.style.visibility = "visible";
+    video.style.opacity = "1";
+    if(autoState.stream){
+      video.pause();
+      video.srcObject = null;
+      // Safari 在静态结果图覆盖 video 一段时间后，偶尔不会自动重绘旧的
+      // MediaStream。跨两个绘制帧后重新绑定同一条流，可强制恢复实时画面。
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      video.srcObject = autoState.stream;
+    }
+    try{
+      await video.play();
+      if(!video.videoWidth || !video.videoHeight) await waitForVideoReady(video);
+    }catch(error){
+      updateAutoStatus("danger", getCameraErrorMessage(error));
+    }
   }
-  document.getElementById("bboxLayer").innerHTML = "";
-  hideAutoBanner();
-  zone.classList.remove("has-image", "analyzed", "auto-review");
   document.getElementById("analyzeBtnText").textContent = "提交 AI 讀取";
   syncState();
 }
@@ -2365,14 +2415,14 @@ async function captureAndAnalyzeAuto(){
   }
   if(!result.ok){
     if(isQuotaOrRateLimitError(result.error)){
-      restoreAutoLiveView();
+      await restoreAutoLiveView();
       autoState.phase = "pausedQuota";
       autoState.busy = false;
       showAutoBanner("danger", "Kimi API 暂时不可用", "检测到 quota exceeded / 限流，自动模式已暂停，避免继续扣费。请稍后关闭再重新开启。", "!");
       updateAutoStatus("danger", "Kimi API 额度或频率限制，自动模式已暂停，避免继续请求");
       return;
     }
-    restoreAutoLiveView();
+    await restoreAutoLiveView();
     beginWaitingNextPlate("本次识别失败。请调整餐盘或换下一盘，冷却后会重试。");
     updateAutoStatus("danger", "本次识别失败，请调整餐盘或换下一盘后重试");
     return;
@@ -2384,7 +2434,7 @@ async function captureAndAnalyzeAuto(){
     const lowText = `风险分 ${state.score} 低于阈值 ${autoState.threshold}，${remaining} 秒后恢复相机预览`;
     showAutoBanner("safe", "识别完成：低于风险阈值", lowText, remaining);
     updateAutoStatus("showingLow", lowText);
-    autoState.resultTimer = setInterval(()=>{
+    autoState.resultTimer = setInterval(async ()=>{
       remaining -= 1;
       if(!autoState.enabled){
         clearInterval(autoState.resultTimer);
@@ -2394,7 +2444,7 @@ async function captureAndAnalyzeAuto(){
       if(remaining <= 0){
         clearInterval(autoState.resultTimer);
         autoState.resultTimer = null;
-        restoreAutoLiveView();
+        await restoreAutoLiveView();
         beginWaitingNextPlate("本盘已自动通过，已恢复相机预览。请换上下一份餐盘。");
         return;
       }
@@ -2757,9 +2807,12 @@ function ensureCustomerProjection(options = {}){
     }catch(e){}
     return true;
   }
-  customerProjectionWindow = window.open(url, "SafePlateCustomerDisplay", "width=1180,height=820");
+  // 不指定窗口尺寸，Safari 会把它当作用户直接打开的新标签页，
+  // 比传统 popup 窗口更不容易被拦截。
+  customerProjectionWindow = window.open(url, "SafePlateCustomerDisplay");
   if(!customerProjectionWindow){
-    showToast("浏览器拦截了顾客屏幕，请先点击右上角“投影到顾客螢幕”授权弹窗");
+    showToast("浏览器阻止了新标签页，正在当前页面打开顾客屏幕");
+    window.location.assign(url);
     return false;
   }
   showToast("顧客展示畫面已開啟");
@@ -2767,11 +2820,12 @@ function ensureCustomerProjection(options = {}){
 }
 
 function openCustomerScreen(){
+  // 先同步打开窗口，保留 Safari 对本次点击的用户授权。
+  const opened = ensureCustomerProjection();
   if(autoState.enabled){
     stopAutoMode();
-    showToast("已关闭自动模式，正在打开顾客屏幕");
+    if(opened) showToast("已关闭自动模式，顾客屏幕已打开");
   }
-  ensureCustomerProjection();
 }
 
 function updateCustomerScreen(){
