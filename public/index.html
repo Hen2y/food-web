@@ -1888,10 +1888,10 @@ function resetManualImageEdit(){
 
 function setCustomerProjectionDisabled(disabled){
   document.querySelectorAll(".customer-project-btn").forEach(button=>{
-    button.disabled = Boolean(disabled);
-    button.style.opacity = disabled ? ".45" : "";
-    button.style.cursor = disabled ? "not-allowed" : "";
-    button.title = disabled ? "自动模式开启时不使用顾客投影" : "";
+    button.disabled = false;
+    button.style.opacity = disabled ? ".72" : "";
+    button.style.cursor = "";
+    button.title = disabled ? "点击后会先关闭自动模式，再打开顾客屏幕" : "";
   });
 }
 
@@ -1989,7 +1989,8 @@ async function analyzePlate(options = {}){
   const requestId = ++analysisRequestSeq;
   if(!state.image){
     if(options.noSample) return {ok:false, error:"没有可分析的图片"};
-    loadSample();
+    await loadSample();
+    if(!state.image) return {ok:false, error:"示范餐盘加载失败"};
   }
   const btn = document.getElementById("analyzeBtn");
   const spinner = document.getElementById("analyzeSpinner");
@@ -2767,8 +2768,8 @@ function ensureCustomerProjection(options = {}){
 
 function openCustomerScreen(){
   if(autoState.enabled){
-    showToast("自动模式开启时已禁用顾客投影");
-    return;
+    stopAutoMode();
+    showToast("已关闭自动模式，正在打开顾客屏幕");
   }
   ensureCustomerProjection();
 }
@@ -2810,35 +2811,37 @@ function updateCustomerScreen(){
   `).join("");
 }
 
-function loadSample(){
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820">
-      <defs>
-        <linearGradient id="bg" x1="0" x2="1"><stop stop-color="#f7fbfd"/><stop offset="1" stop-color="#e9f4f0"/></linearGradient>
-        <filter id="s"><feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#123" flood-opacity=".16"/></filter>
-      </defs>
-      <rect width="1200" height="820" fill="url(#bg)"/>
-      <rect x="140" y="90" width="920" height="640" rx="58" fill="#e9eef1" filter="url(#s)"/>
-      <rect x="190" y="140" width="820" height="540" rx="36" fill="#fdfefe"/>
-      <circle cx="395" cy="405" r="150" fill="#ffffff"/>
-      <g fill="#f7f7f7"><circle cx="345" cy="360" r="20"/><circle cx="405" cy="392" r="24"/><circle cx="450" cy="335" r="18"/><circle cx="370" cy="470" r="22"/><circle cx="480" cy="455" r="20"/></g>
-      <path d="M560 175h390v450H560z" fill="#f6faf8"/>
-      <g>
-        <circle cx="650" cy="260" r="42" fill="#63bf7c"/><circle cx="725" cy="305" r="38" fill="#78d694"/><circle cx="815" cy="260" r="44" fill="#65b87a"/>
-        <circle cx="870" cy="360" r="38" fill="#f0a040"/><circle cx="660" cy="430" r="52" fill="#6fc17f"/><circle cx="785" cy="465" r="44" fill="#58a96a"/>
-        <path d="M585 535c90-40 215-30 350 18 12 4 19 17 15 29-34 95-288 75-369 0-15-14-12-39 4-47z" fill="#9d612e"/>
-      </g>
-      <path d="M825 455l52 16-36 39z" fill="#d9e0e5" stroke="#aebbc5" stroke-width="4"/>
-      <circle cx="385" cy="385" r="10" fill="#e3a14e"/>
-      <circle cx="420" cy="420" r="8" fill="#e3a14e"/>
-      <text x="600" y="735" font-family="Arial" font-size="30" fill="#5a6878" font-weight="700">SafePlate Demo Meal Tray</text>
-    </svg>`;
-  state.image = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
-  resetManualImageEditor(state.image, true);
-  state.analyzed = false;
-  setPreview(state.image);
-  syncState();
-  showToast("已載入示範餐盤");
+function loadImageAsDataUrl(src){
+  return new Promise((resolve,reject)=>{
+    const image = new Image();
+    image.onload = ()=>{
+      const maxSide = 1100;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", .78));
+    };
+    image.onerror = ()=>reject(new Error("示范餐盘图片加载失败"));
+    image.src = src;
+  });
+}
+
+async function loadSample(){
+  try{
+    showToast("正在载入示范餐盘...");
+    state.image = await loadImageAsDataUrl("/images/sample-tray.jpeg");
+    resetManualImageEditor(state.image, true);
+    state.analyzed = false;
+    document.getElementById("bboxLayer").innerHTML = "";
+    setPreview(state.image);
+    syncState();
+    showToast("已载入真实示范餐盘");
+  }catch(error){
+    showToast(error.message || "示范餐盘加载失败");
+  }
 }
 
 function resetDemo(){
