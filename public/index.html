@@ -38,10 +38,46 @@
         linear-gradient(180deg,#f7fafc 0%,#edf4f7 52%,#f8fafc 100%);
       overflow:hidden;
     }
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      z-index:0;
+      pointer-events:none;
+      background:
+        linear-gradient(90deg,rgba(247,250,252,.92),rgba(247,250,252,.78) 48%,rgba(237,244,247,.88)),
+        linear-gradient(180deg,rgba(247,250,252,.86),rgba(237,244,247,.92));
+    }
+    .dish-bg{
+      position:fixed;
+      inset:0;
+      z-index:0;
+      pointer-events:none;
+      background-size:cover;
+      background-position:center;
+      opacity:0;
+      transform:scale(1.04);
+      transition:opacity 1.5s ease, transform 8s ease;
+      filter:saturate(1.02) contrast(.98);
+    }
+    .dish-bg.active{
+      opacity:.28;
+      transform:scale(1);
+    }
+    .dish-bg::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        linear-gradient(90deg,rgba(247,250,252,.88),rgba(247,250,252,.64) 46%,rgba(247,250,252,.82)),
+        linear-gradient(180deg,rgba(247,250,252,.72),rgba(237,244,247,.88));
+    }
 
     button,input,select,textarea{font:inherit}
     button{border:0;cursor:pointer}
     .app{
+      position:relative;
+      z-index:1;
       display:grid;
       grid-template-columns:var(--sidebar) 1fr;
       height:100vh;
@@ -912,11 +948,13 @@
     /* Customer screen */
     .customer-screen{
       display:none;
+      position:relative;
+      z-index:1;
       min-height:100vh;
       padding:24px;
       background:
-        linear-gradient(135deg,rgba(21,167,121,.08),transparent 36%),
-        linear-gradient(180deg,#f7fafc,#eef5f7);
+        linear-gradient(135deg,rgba(21,167,121,.10),rgba(247,250,252,.84) 38%,rgba(238,245,247,.92)),
+        linear-gradient(180deg,rgba(247,250,252,.92),rgba(238,245,247,.94));
       overflow:auto;
     }
     .ipad-shell{
@@ -1060,6 +1098,7 @@
     }
     .toast{
       position:fixed;
+      z-index:50;
       right:24px;
       bottom:24px;
       background:#17212f;
@@ -1071,7 +1110,6 @@
       opacity:0;
       pointer-events:none;
       transition:.25s ease;
-      z-index:50;
       font-weight:750;
     }
     .toast.show{transform:translateY(0);opacity:1}
@@ -1191,6 +1229,8 @@
 </head>
 
 <body>
+  <div class="dish-bg dish-bg-a active" aria-hidden="true"></div>
+  <div class="dish-bg dish-bg-b" aria-hidden="true"></div>
   <div class="app" id="operatorApp">
     <aside class="sidebar">
       <div class="brand">
@@ -1650,6 +1690,20 @@ const state = {
   detections: [],
   records: []
 };
+const dishBackgrounds = [
+  "https://foodish-api.com/images/biryani/biryani1.jpg",
+  "https://foodish-api.com/images/pasta/pasta1.jpg",
+  "https://foodish-api.com/images/rice/rice1.jpg",
+  "https://foodish-api.com/images/dosa/dosa1.jpg",
+  "https://foodish-api.com/images/samosa/samosa1.jpg"
+];
+const dishBackgroundSources = [
+  "Foodish biryani image",
+  "Foodish pasta image",
+  "Foodish rice image",
+  "Foodish dosa image",
+  "Foodish samosa image"
+];
 let recordImageStore = [];
 let customerProjectionWindow = null;
 let analysisRequestSeq = 0;
@@ -1686,6 +1740,52 @@ const autoState = {
   currentSignature: null,
   lastAnalyzeAt: 0
 };
+
+let dishBackgroundIndex = 0;
+let dishBackgroundActiveLayer = 0;
+let dishBackgroundTimer = null;
+
+function preloadDishBackground(url){
+  return new Promise((resolve,reject)=>{
+    const image = new Image();
+    image.onload = resolve;
+    image.onerror = reject;
+    image.src = url;
+  });
+}
+
+async function setDishBackground(index, instant = false){
+  if(!dishBackgrounds.length) return;
+  const normalizedIndex = ((index % dishBackgrounds.length) + dishBackgrounds.length) % dishBackgrounds.length;
+  const url = dishBackgrounds[normalizedIndex];
+  const layers = [document.querySelector(".dish-bg-a"), document.querySelector(".dish-bg-b")];
+  if(!layers[0] || !layers[1]) return;
+  try{
+    await preloadDishBackground(url);
+  }catch(error){
+    return;
+  }
+  const nextLayerIndex = instant ? dishBackgroundActiveLayer : 1 - dishBackgroundActiveLayer;
+  const nextLayer = layers[nextLayerIndex];
+  const previousLayer = layers[dishBackgroundActiveLayer];
+  nextLayer.style.backgroundImage = `url("${url}")`;
+  nextLayer.dataset.source = dishBackgroundSources[normalizedIndex] || "";
+  requestAnimationFrame(()=>{
+    nextLayer.classList.add("active");
+    if(!instant) previousLayer.classList.remove("active");
+  });
+  dishBackgroundIndex = normalizedIndex;
+  dishBackgroundActiveLayer = nextLayerIndex;
+}
+
+function startDishBackgroundRotation(){
+  setDishBackground(0, true);
+  if(dishBackgroundTimer) clearInterval(dishBackgroundTimer);
+  dishBackgroundTimer = setInterval(()=>{
+    if(document.hidden) return;
+    setDishBackground(dishBackgroundIndex + 1);
+  }, 180000);
+}
 
 const pageInfo = {
   dashboard:["總覽儀表板","以一張餐盤照片，同步完成異物預警、過敏原比對與結果展示。"],
@@ -3141,6 +3241,7 @@ window.addEventListener("message", event=>{
 });
 
 async function initMode(){
+  startDishBackgroundRotation();
   const synced = getSyncedState();
   Object.assign(state, synced, {dataVersion: 3});
   // 顾客屏幕不需要等待 Supabase 历史记录。线上数据库唤醒较慢时，
