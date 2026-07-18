@@ -3080,7 +3080,8 @@ async function monitorAutoFrame(){
   autoState.lastPresenceScore = presenceScore;
   autoState.currentSignature = signature;
   const looksLikeFace = faceLikeScore >= 42 && centerFoodLikeRatio < 0.22;
-  const looksLikeEmptyTable = (tableLikeScore >= 62 && plateLikeScore < 34 && centerFoodLikeRatio < 0.18) || (blueMarkerScore >= 18 && tableLikeScore >= 42 && plateLikeScore < 45);
+  const seesBlueTableMarker = blueMarkerScore >= 8;
+  const looksLikeEmptyTable = seesBlueTableMarker || (tableLikeScore >= 62 && plateLikeScore < 34 && centerFoodLikeRatio < 0.18);
   document.getElementById("autoPresenceText").textContent = `餐盘 ${plateLikeScore}% / 桌面 ${tableLikeScore}% / 标记 ${blueMarkerScore}%`;
   const hasMeal = !looksLikeFace && !looksLikeEmptyTable && presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio && centerColorfulRatio >= autoState.minCenterColorfulRatio && plateLikeScore >= autoState.minPlateLikeScore;
 
@@ -3094,7 +3095,7 @@ async function monitorAutoFrame(){
       }
     }else{
       autoState.stableSince = 0;
-      updateAutoStatus("waitingPlate", looksLikeFace ? "检测到人物画面，请把餐盘放到画面中央后再识别" : looksLikeEmptyTable ? "检测到空桌面/桌面标记，等待餐盘放入画面" : presenceScore >= autoState.mealPresenceThreshold ? "画面有变化，但还不像完整餐盘；请把餐盘放到画面中央" : "等待餐盘进入画面");
+      updateAutoStatus("waitingPlate", looksLikeFace ? "检测到人物画面，请把餐盘放到画面中央后再识别" : seesBlueTableMarker ? "检测到蓝色桌面标记，禁止拍照，等待餐盘完全遮住标记" : looksLikeEmptyTable ? "检测到空桌面，等待餐盘放入画面" : presenceScore >= autoState.mealPresenceThreshold ? "画面有变化，但还不像完整餐盘；请把餐盘放到画面中央" : "等待餐盘进入画面");
     }
   }else if(autoState.phase === "waitingNext" || autoState.phase === "waitingClear"){
     const changed = frameSignatureDistance(signature, autoState.lastCaptureSignature);
