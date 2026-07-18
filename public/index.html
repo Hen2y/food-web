@@ -2997,7 +2997,12 @@ function getAutoFrameMetrics(){
     const isSkinLike = r > 72 && g > 42 && b > 24 && r > g * 1.12 && g > b * 1.06 && r - b > 34 && sat > .18 && sat < .68 && lum > 64 && lum < 225;
     const isDarkHairLike = lum < 58 && sat < .55;
     const isWoodLike = r > 95 && g > 52 && b > 22 && r > g * 1.18 && g > b * 1.35 && sat > .24 && sat < .74 && lum > 70 && lum < 230;
-    const isBlueMarkerLike = b > 70 && g > 70 && r < g * .78 && b > r * 1.35 && sat > .28 && lum > 45 && lum < 205;
+    const isBlueMarkerLike = (
+      b > 55 && g > 50 && r < 115 &&
+      g > r * 1.12 && b > r * 1.03 &&
+      Math.abs(g - b) < 95 &&
+      sat > .16 && lum > 35 && lum < 225
+    );
     const isPlateBrightLike = max - min < 28 && lum > 135 && lum < 246;
     if(isColorful) colorful++;
     if(isFoodLike) foodLike++;
@@ -3062,11 +3067,11 @@ function getAutoFrameMetrics(){
   const plateBrightRatio = plateBrightLike / total;
   const centerPlateBrightRatio = centerTotal ? centerPlateBrightLike / centerTotal : 0;
   const tableLikeScore = Math.round(Math.min(100, woodRatio * 72 + centerWoodRatio * 70 + (contrast/total) * 18));
-  const blueMarkerScore = Math.round(Math.min(100, blueMarkerRatio * 360 + centerBlueMarkerRatio * 420));
+  const blueMarkerScore = Math.round(Math.min(100, blueMarkerRatio * 520 + centerBlueMarkerRatio * 620));
   const plateLikeScore = Math.round(Math.min(100, centerFoodLikeRatio * 56 + centerColorfulRatio * 22 + centerPlateBrightRatio * 42 + plateBrightRatio * 14));
   const tablePenalty = tableLikeScore > 58 && blueMarkerScore > 14 ? 34 : tableLikeScore > 72 && centerFoodLikeRatio < .18 ? 24 : 0;
   const groundedPresenceScore = Math.round(Math.max(0, Math.min(100, (colorful/total)*56 + (foodLike/total)*112 + (centerFoodLikeRatio)*46 + (centerColorfulRatio)*22 + (contrast/total)*10 + plateLikeScore * .32 - tablePenalty)));
-  return {presenceScore:groundedPresenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, tableLikeScore, blueMarkerScore, plateLikeScore, signature};
+  return {presenceScore:groundedPresenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, tableLikeScore, blueMarkerScore, blueMarkerPixels:blueMarkerLike, plateLikeScore, signature};
 }
 
 function getMealPresenceScore(){
@@ -3076,13 +3081,13 @@ function getMealPresenceScore(){
 async function monitorAutoFrame(){
   if(!autoState.enabled || autoState.busy) return;
   const now = Date.now();
-  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, tableLikeScore, blueMarkerScore, plateLikeScore, signature} = getAutoFrameMetrics();
+  const {presenceScore, centerScore, foodLikeRatio, centerFoodLikeRatio, centerColorfulRatio, faceLikeScore, tableLikeScore, blueMarkerScore, blueMarkerPixels, plateLikeScore, signature} = getAutoFrameMetrics();
   autoState.lastPresenceScore = presenceScore;
   autoState.currentSignature = signature;
   const looksLikeFace = faceLikeScore >= 42 && centerFoodLikeRatio < 0.22;
-  const seesBlueTableMarker = blueMarkerScore >= 8;
+  const seesBlueTableMarker = blueMarkerScore >= 2 || blueMarkerPixels >= 6;
   const looksLikeEmptyTable = seesBlueTableMarker || (tableLikeScore >= 62 && plateLikeScore < 34 && centerFoodLikeRatio < 0.18);
-  document.getElementById("autoPresenceText").textContent = `餐盘 ${plateLikeScore}% / 桌面 ${tableLikeScore}% / 标记 ${blueMarkerScore}%`;
+  document.getElementById("autoPresenceText").textContent = `餐盘 ${plateLikeScore}% / 桌面 ${tableLikeScore}% / 标记 ${blueMarkerScore}%/${blueMarkerPixels}`;
   const hasMeal = !looksLikeFace && !looksLikeEmptyTable && presenceScore >= autoState.mealPresenceThreshold && centerScore >= autoState.centerFoodThreshold && foodLikeRatio >= autoState.minFoodLikeRatio && centerFoodLikeRatio >= autoState.minCenterFoodLikeRatio && centerColorfulRatio >= autoState.minCenterColorfulRatio && plateLikeScore >= autoState.minPlateLikeScore;
 
   if(autoState.phase === "waitingPlate"){
