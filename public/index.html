@@ -898,6 +898,121 @@
     .result-item strong{display:block;font-size:13px;margin-bottom:2px}
     .result-item p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
 
+    .menu-note{
+      padding:13px 14px;
+      border-radius:12px;
+      background:color-mix(in srgb,var(--theme-primary) 10%, rgba(16,24,36,.66));
+      color:var(--muted);
+      line-height:1.65;
+      font-size:13px;
+      margin-bottom:16px;
+    }
+    .menu-note strong{color:var(--text)}
+    .menu-grid{
+      display:grid;
+      grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:14px;
+    }
+    .menu-card{
+      overflow:hidden;
+      border-radius:16px;
+      background:color-mix(in srgb,var(--surface-main) 78%, transparent);
+      box-shadow:var(--soft-shadow);
+      display:flex;
+      flex-direction:column;
+      min-height:100%;
+      transition:opacity .2s ease, filter .2s ease, transform .2s ease;
+    }
+    .menu-card:hover{transform:translateY(-1px)}
+    .menu-card.off{
+      opacity:.56;
+      filter:saturate(.72);
+    }
+    .menu-photo{
+      position:relative;
+      height:142px;
+      overflow:hidden;
+      background:#101827;
+    }
+    .menu-photo img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+      filter:saturate(1.04) contrast(1.02);
+    }
+    .menu-photo:after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:linear-gradient(180deg,transparent 34%,rgba(0,0,0,.60));
+    }
+    .menu-category{
+      position:absolute;
+      left:10px;
+      bottom:10px;
+      z-index:1;
+      display:inline-flex;
+      border-radius:999px;
+      padding:5px 9px;
+      font-size:11px;
+      font-weight:900;
+      color:#fff;
+      background:rgba(0,0,0,.46);
+      backdrop-filter:blur(12px);
+    }
+    .menu-body{
+      padding:13px;
+      display:flex;
+      flex-direction:column;
+      gap:9px;
+      flex:1;
+    }
+    .menu-title{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .menu-title h4{
+      margin:0;
+      font-size:15px;
+      line-height:1.35;
+    }
+    .menu-switch{
+      padding:6px 8px;
+      border-radius:999px;
+      font-size:11px;
+      font-weight:900;
+      color:#fff;
+      background:linear-gradient(135deg,var(--theme-primary),var(--theme-secondary));
+      border:1px solid rgba(255,255,255,.22);
+      flex:0 0 auto;
+    }
+    .menu-card.off .menu-switch{
+      background:rgba(255,255,255,.10);
+      color:var(--muted);
+    }
+    .menu-tags{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .menu-tags span{
+      border-radius:999px;
+      padding:5px 8px;
+      font-size:11px;
+      font-weight:800;
+      color:color-mix(in srgb,var(--theme-primary) 70%, #ffffff);
+      background:rgba(var(--theme-glow),.12);
+    }
+    .menu-body p{
+      margin:0;
+      color:var(--muted);
+      line-height:1.55;
+      font-size:12px;
+    }
+
     .progress-line{
       height:8px;
       background:#edf3f6;
@@ -1442,6 +1557,8 @@
     .customer-alert,
     .ipad-shell,
     .image-modal-card,
+    .menu-card,
+    .menu-note,
     .mini-card,
     .mode-tip,
     .result-item,
@@ -1466,6 +1583,8 @@
     .customer-alert,
     .ipad-shell,
     .image-modal-card,
+    .menu-card,
+    .menu-note,
     .mini-card,
     .mode-tip,
     .result-item,
@@ -1512,6 +1631,7 @@
       .nav button{justify-content:center;padding:14px}
       .workspace{grid-template-columns:1fr}
       .grid-dashboard{grid-template-columns:1fr}
+      .menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media (max-width:760px){
       body{overflow:auto}
@@ -1520,6 +1640,7 @@
       .topbar{height:auto;align-items:flex-start;flex-direction:column;margin-bottom:14px}
       .top-actions{width:100%;overflow-x:auto}
       .grid-three,.grid-two,.customer-body{grid-template-columns:1fr}
+      .menu-grid{grid-template-columns:1fr}
       .step-strip,.mode-tips{grid-template-columns:1fr}
       .editor-tools{grid-template-columns:1fr}
       .zoom-control{min-width:0}
@@ -1564,6 +1685,10 @@
         <button data-page="scan" onclick="switchPage('scan')">
           <svg viewBox="0 0 24 24" fill="none"><path d="M5 4h5v2H7v3H5V4Zm9 0h5v5h-2V6h-3V4ZM5 15h2v3h3v2H5v-5Zm12 3v-3h2v5h-5v-2h3ZM8 8h8v8H8V8Z" fill="currentColor"/></svg>
           <span>AI 檢測工作台</span>
+        </button>
+        <button data-page="menu" onclick="switchPage('menu')">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v3H4V4Zm1 5h14v11H5V9Zm3 2v2h8v-2H8Zm0 4v2h5v-2H8Z" fill="currentColor"/></svg>
+          <span>學校菜單</span>
         </button>
         <button data-page="profiles" onclick="switchPage('profiles')">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-8 8a8 8 0 0 1 16 0H4Z" fill="currentColor"/></svg>
@@ -1851,6 +1976,25 @@
           </div>
         </div>
 
+        <!-- School Menu -->
+        <div class="page" id="page-menu">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>學校菜單參考庫</h3>
+                <span>用網上食物照片暫時模擬學校菜單，AI 會把啟用的菜品作為識別參考</span>
+              </div>
+              <span class="status-pill safe" id="menuEnabledCount">0 道已啟用</span>
+            </div>
+            <div class="card-pad">
+              <div class="menu-note">
+                <strong>用途：</strong>當餐盤圖片像菜單中的菜時，AI 會參考這裡的菜名、食材和隐藏过敏源。這不是直接給 AI 標準答案，而是讓它更像在對接學校今日菜單。
+              </div>
+              <div class="menu-grid" id="schoolMenuGrid"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Profiles -->
         <div class="page" id="page-profiles">
           <div class="grid grid-two">
@@ -2008,7 +2152,89 @@ const state = {
     {id:"huang", name:"黄先生", allergens:[], sensitivity:"normal"}
   ],
   detections: [],
-  records: []
+  records: [],
+  schoolMenu: [
+    {
+      id:"menu_chicken_tofu",
+      name:"鸡豆花",
+      category:"汤菜",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
+      ingredients:["鸡胸肉","蛋清","高汤","淀粉","绿叶点缀"],
+      allergens:["鸡肉","蛋清","鸡蛋","小麦/淀粉"],
+      note:"外观看起来像豆腐或豆花，但通常由鸡蓉和蛋清制成；不要仅凭白色嫩块外观判断为豆腐。"
+    },
+    {
+      id:"menu_kungpao",
+      name:"宫保鸡丁",
+      category:"热菜",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&w=900&q=80",
+      ingredients:["鸡肉","花生","辣椒","葱","酱油"],
+      allergens:["鸡肉","花生","大豆","小麦"],
+      note:"如果登记花生或鸡肉过敏，应重点提示；酱油也可能带入大豆/小麦。"
+    },
+    {
+      id:"menu_mapo_tofu",
+      name:"麻婆豆腐",
+      category:"热菜",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80",
+      ingredients:["豆腐","肉末","豆瓣酱","花椒","酱油"],
+      allergens:["大豆","豆腐","小麦","猪肉/牛肉"],
+      note:"主要关注大豆/豆腐，豆瓣酱和酱油可能含大豆或小麦；肉末种类需现场确认。"
+    },
+    {
+      id:"menu_wonton_noodle",
+      name:"云吞汤面",
+      category:"面食",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80",
+      ingredients:["面条","云吞皮","猪肉馅","虾仁可能","青菜"],
+      allergens:["小麦","麸质","虾","猪肉","鸡蛋"],
+      note:"云吞外皮通常含小麦，馅料可能含猪肉、虾或蛋；图像看不到馅料时应提示询问食堂。"
+    },
+    {
+      id:"menu_steamed_fish",
+      name:"清蒸鱼",
+      category:"鱼类",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=900&q=80",
+      ingredients:["鱼","葱","姜","酱油","香菜"],
+      allergens:["鱼类","大豆","小麦"],
+      note:"整鱼的鱼头、鱼尾、鱼皮、鱼骨通常属于菜品本身；鱼类过敏时才作为过敏风险重点。"
+    },
+    {
+      id:"menu_tomato_egg",
+      name:"番茄炒蛋",
+      category:"热菜",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=900&q=80",
+      ingredients:["鸡蛋","番茄","葱","食用油"],
+      allergens:["鸡蛋","蛋类"],
+      note:"黄色块状物通常是鸡蛋，不要只当作普通蔬菜；蛋类过敏需要提示。"
+    },
+    {
+      id:"menu_salad",
+      name:"蔬菜沙拉",
+      category:"冷菜",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+      ingredients:["生菜","番茄","黄瓜","芝麻酱/蛋黄酱可能","坚果碎可能"],
+      allergens:["芝麻","鸡蛋","坚果","花生"],
+      note:"沙拉的风险常来自酱料和配料碎，不一定能直接看见；需提醒询问食堂。"
+    },
+    {
+      id:"menu_cream_soup",
+      name:"奶油蘑菇汤",
+      category:"汤品",
+      enabled:true,
+      image:"https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=900&q=80",
+      ingredients:["蘑菇","牛奶","奶油","黄油","小麦粉可能"],
+      allergens:["牛奶","乳制品","小麦"],
+      note:"白色浓汤常含牛奶/奶油/黄油，也可能用小麦粉增稠。"
+    }
+  ]
 };
 const dishBackgrounds = [
   {
@@ -2249,6 +2475,7 @@ function startDishBackgroundRotation(){
 const pageInfo = {
   dashboard:["總覽儀表板","以一張餐盤照片，同步完成異物預警、過敏原比對與結果展示。"],
   scan:["AI 檢測工作台","上傳餐盤照片，提交 AI 讀取，並把結果投影到 iPad 或第二螢幕。"],
+  menu:["學校菜單","用今日菜單、菜品照片與食材資料輔助 AI 判斷隐藏过敏源。"],
   profiles:["過敏原檔案","管理學生或顧客的個人過敏資料，支援精準提醒。"],
   records:["檢測記錄","追蹤每次掃描結果，方便管理者作日常食安監測。"],
   settings:["系統設定","設定檢測清單、提醒文字與顧客展示模式。"]
@@ -2690,7 +2917,11 @@ async function analyzePlate(options = {}){
     const response = await fetch("/api/analyze", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({image:state.image, allergens:profile ? profile.allergens : []}),
+      body:JSON.stringify({
+        image:state.image,
+        allergens:profile ? profile.allergens : [],
+        menuItems:getEnabledSchoolMenuItems()
+      }),
       signal:controller.signal
     });
     const result = await response.json().catch(()=>({}));
@@ -3588,6 +3819,56 @@ function renderTables(){
 
 let editingProfileId = null;
 
+function getEnabledSchoolMenuItems(){
+  return (state.schoolMenu || [])
+    .filter(item=>item && item.enabled !== false)
+    .map(item=>({
+      id:item.id,
+      name:item.name,
+      category:item.category,
+      ingredients:Array.isArray(item.ingredients) ? item.ingredients : [],
+      allergens:Array.isArray(item.allergens) ? item.allergens : [],
+      note:item.note || ""
+    }));
+}
+
+function renderSchoolMenu(){
+  const grid = document.getElementById("schoolMenuGrid");
+  const counter = document.getElementById("menuEnabledCount");
+  if(!grid) return;
+  const menu = Array.isArray(state.schoolMenu) ? state.schoolMenu : [];
+  const enabledCount = menu.filter(item=>item.enabled !== false).length;
+  if(counter) counter.textContent = `${enabledCount} 道已啟用`;
+  grid.innerHTML = menu.map(item=>`
+    <article class="menu-card ${item.enabled === false ? "off" : ""}">
+      <div class="menu-photo">
+        <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name || "菜品照片")}" loading="lazy" />
+        <span class="menu-category">${escapeHtml(item.category || "菜品")}</span>
+      </div>
+      <div class="menu-body">
+        <div class="menu-title">
+          <h4>${escapeHtml(item.name || "未命名菜品")}</h4>
+          <button class="menu-switch" type="button" onclick="toggleMenuItem('${escapeHtml(item.id)}')">${item.enabled === false ? "未參考" : "AI參考"}</button>
+        </div>
+        <div class="menu-tags">
+          ${(item.allergens || []).slice(0,4).map(tag=>`<span>${escapeHtml(tag)}</span>`).join("")}
+        </div>
+        <p><strong>食材：</strong>${escapeHtml((item.ingredients || []).join("、") || "未填写")}</p>
+        <p>${escapeHtml(item.note || "暂无识别备注。")}</p>
+      </div>
+    </article>
+  `).join("") || `<div class="empty"><h4>暂无菜单</h4><p>之后可以把学校真实菜单接进这里。</p></div>`;
+}
+
+function toggleMenuItem(id){
+  const item = (state.schoolMenu || []).find(menuItem=>menuItem.id === id);
+  if(!item) return;
+  item.enabled = item.enabled === false;
+  renderSchoolMenu();
+  syncState();
+  showToast(item.enabled ? `${item.name} 已加入 AI 菜单参考` : `${item.name} 已暂不参与 AI 参考`);
+}
+
 function renderProfiles(){
   const list = document.getElementById("profileList");
   const select = document.getElementById("customerSelect");
@@ -3942,9 +4223,11 @@ async function initMode(){
   renderDashboardStats();
   renderTables();
   renderDashboardResult();
+  renderSchoolMenu();
   await loadDatabaseRecords({silent:true});
   await loadDatabaseProfiles({silent:true});
   renderProfiles();
+  renderSchoolMenu();
   syncState();
 }
 

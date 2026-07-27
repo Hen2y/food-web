@@ -124,6 +124,32 @@ function normalize(result) {
   };
 }
 
+function sanitizeMenuItems(menuItems = []) {
+  if (!Array.isArray(menuItems)) return [];
+  return menuItems
+    .filter((item) => item && item.enabled !== false)
+    .slice(0, 12)
+    .map((item) => ({
+      name: String(item.name || "").trim().slice(0, 60),
+      category: String(item.category || "学校菜单").trim().slice(0, 40),
+      ingredients: Array.isArray(item.ingredients) ? item.ingredients.map(String).slice(0, 12) : [],
+      allergens: Array.isArray(item.allergens) ? item.allergens.map(String).slice(0, 12) : [],
+      note: String(item.note || "").trim().slice(0, 220),
+    }))
+    .filter((item) => item.name);
+}
+
+function buildMenuReferenceText(menuItems = []) {
+  const items = sanitizeMenuItems(menuItems);
+  if (!items.length) return "学校菜单暂未启用。";
+  return items.map((item, index) => [
+    `${index + 1}. ${item.name}（${item.category || "菜品"}）`,
+    `   常见食材：${item.ingredients.length ? item.ingredients.join("、") : "未填写"}`,
+    `   过敏源/隐藏成分：${item.allergens.length ? item.allergens.join("、") : "未标注"}`,
+    item.note ? `   菜品识别备注：${item.note}` : "",
+  ].filter(Boolean).join("\n")).join("\n");
+}
+
 function getProviderErrorMessage(payload, status) {
   const raw = String(payload?.error?.message || payload?.message || "");
   if (/quota|exceeded|insufficient|余额|额度|用量|欠费/i.test(raw)) {
@@ -143,7 +169,7 @@ export async function POST(request) {
     if (!process.env.MOONSHOT_API_KEY) {
       return NextResponse.json({ error: "尚未配置 MOONSHOT_API_KEY" }, { status: 503 });
     }
-    const { image, allergens = [] } = await request.json();
+    const { image, allergens = [], menuItems = [] } = await request.json();
     if (typeof image !== "string" || !image.startsWith("data:image/") || image.length > MAX_IMAGE_LENGTH) {
       return NextResponse.json({ error: "请上传不超过约 7MB 的图片" }, { status: 400 });
     }
@@ -152,6 +178,7 @@ export async function POST(request) {
     const dishKnowledgeText = dishKnowledge.length
       ? dishKnowledge.map((item) => `${item.dish}：${item.note}`).join("\n")
       : "无特别匹配的菜品知识；仍需按常见菜品和配料推断隐藏过敏源。";
+    const menuReferenceText = buildMenuReferenceText(menuItems);
 
     const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -178,6 +205,7 @@ export async function POST(request) {
                     ? `扩展说明：${allergenContext.matched.map((item) => `${item.input}→${item.note}`).join("；")}`
                     : "没有匹配到内置扩展词库时，请只按用户原始输入检查。",
                   `内置菜品知识库：\n${dishKnowledgeText}`,
+                  `学校菜单参考（模拟对接学校菜单；如果图片中的餐食像这些菜，请优先参考其食材和隐藏过敏源，但不要强行套用）：\n${menuReferenceText}`,
                   "请优先标出与登记过敏原或扩展词相关的可见风险；对隐藏成分只给风险提示，不要把不确定内容说成确定。",
                   "识别菜品名时要考虑同形不同料：鸡豆花看起来像白色豆腐/豆花，但通常不是豆腐，而是鸡肉/蛋清制成；如果画面是白色细嫩块状物浸在清汤里、带红色点缀和绿叶装饰，应把鸡豆花作为候选菜名，并检查鸡肉/蛋清隐藏过敏源。",
                   "请用常识复核结果：若透明/反光物位于米饭、热菜、汤菜中，不要标为冰块；应作为疑似透明异物处理，并提醒人工确认是否为玻璃、塑料或其他异物。",
