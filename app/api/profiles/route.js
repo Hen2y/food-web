@@ -49,84 +49,106 @@ function getProviderError(payload) {
   return message || "Supabase 档案操作失败";
 }
 
-export async function GET() {
-  const { url, serviceRoleKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    return NextResponse.json({ configured: false, profiles: [] });
-  }
-
-  const response = await fetch(
-    `${url}/rest/v1/${SUPABASE_TABLE}?select=*&order=updated_at.desc`,
-    { headers: supabaseHeaders(serviceRoleKey), cache: "no-store" }
-  );
-
-  const payload = await response.json().catch(() => []);
-  if (!response.ok) {
-    return NextResponse.json({ error: getProviderError(payload) }, { status: 502 });
-  }
-
+function profilesUnavailable(message = "Supabase 档案暂不可用，已使用本地档案。") {
   return NextResponse.json({
-    configured: true,
-    profiles: Array.isArray(payload) ? payload.map(toClientProfile) : [],
+    configured: false,
+    profiles: [],
+    saved: false,
+    deleted: false,
+    warning: message,
   });
+}
+
+export async function GET() {
+  try {
+    const { url, serviceRoleKey, configured } = getSupabaseConfig();
+    if (!configured) {
+      return NextResponse.json({ configured: false, profiles: [] });
+    }
+
+    const response = await fetch(
+      `${url}/rest/v1/${SUPABASE_TABLE}?select=*&order=updated_at.desc`,
+      { headers: supabaseHeaders(serviceRoleKey), cache: "no-store" }
+    );
+
+    const payload = await response.json().catch(() => []);
+    if (!response.ok) {
+      return profilesUnavailable(getProviderError(payload));
+    }
+
+    return NextResponse.json({
+      configured: true,
+      profiles: Array.isArray(payload) ? payload.map(toClientProfile) : [],
+    });
+  } catch (error) {
+    return profilesUnavailable(error?.message || "Supabase 档案读取异常，已使用本地档案。");
+  }
 }
 
 export async function POST(request) {
-  const { url, serviceRoleKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    return NextResponse.json({ configured: false, saved: false });
+  try {
+    const { url, serviceRoleKey, configured } = getSupabaseConfig();
+    if (!configured) {
+      return NextResponse.json({ configured: false, saved: false });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const profiles = Array.isArray(body.profiles) ? body.profiles : [body.profile || body];
+    const rows = profiles.map(toDatabaseProfile).filter((profile) => profile.name);
+
+    if (!rows.length) {
+      return NextResponse.json({ error: "没有可保存的过敏原档案" }, { status: 400 });
+    }
+
+    const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}?on_conflict=profile_id`, {
+      method: "POST",
+      headers: {
+        ...supabaseHeaders(serviceRoleKey),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(rows),
+    });
+
+    const payload = await response.json().catch(() => []);
+    if (!response.ok) {
+      return NextResponse.json({ configured: false, saved: false, warning: getProviderError(payload) });
+    }
+
+    const savedProfiles = Array.isArray(payload) ? payload.map(toClientProfile) : [];
+    return NextResponse.json({ configured: true, saved: true, profiles: savedProfiles });
+  } catch (error) {
+    return NextResponse.json({ configured: false, saved: false, warning: error?.message || "Supabase 档案保存异常，已保存在本机。" });
   }
-
-  const body = await request.json().catch(() => ({}));
-  const profiles = Array.isArray(body.profiles) ? body.profiles : [body.profile || body];
-  const rows = profiles.map(toDatabaseProfile).filter((profile) => profile.name);
-
-  if (!rows.length) {
-    return NextResponse.json({ error: "没有可保存的过敏原档案" }, { status: 400 });
-  }
-
-  const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}?on_conflict=profile_id`, {
-    method: "POST",
-    headers: {
-      ...supabaseHeaders(serviceRoleKey),
-      Prefer: "resolution=merge-duplicates,return=representation",
-    },
-    body: JSON.stringify(rows),
-  });
-
-  const payload = await response.json().catch(() => []);
-  if (!response.ok) {
-    return NextResponse.json({ error: getProviderError(payload) }, { status: 502 });
-  }
-
-  const savedProfiles = Array.isArray(payload) ? payload.map(toClientProfile) : [];
-  return NextResponse.json({ configured: true, saved: true, profiles: savedProfiles });
 }
 
 export async function DELETE(request) {
-  const { url, serviceRoleKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    return NextResponse.json({ configured: false, deleted: false });
+  try {
+    const { url, serviceRoleKey, configured } = getSupabaseConfig();
+    if (!configured) {
+      return NextResponse.json({ configured: false, deleted: false });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const id = String(body.id || "").trim();
+    if (!id) {
+      return NextResponse.json({ error: "缺少档案 ID" }, { status: 400 });
+    }
+
+    const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}?profile_id=eq.${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: {
+        ...supabaseHeaders(serviceRoleKey),
+        Prefer: "return=minimal",
+      },
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      return NextResponse.json({ configured: false, deleted: false, warning: getProviderError(payload) });
+    }
+
+    return NextResponse.json({ configured: true, deleted: true });
+  } catch (error) {
+    return NextResponse.json({ configured: false, deleted: false, warning: error?.message || "Supabase 档案删除异常，已先从本机移除。" });
   }
-
-  const body = await request.json().catch(() => ({}));
-  const id = String(body.id || "").trim();
-  if (!id) {
-    return NextResponse.json({ error: "缺少档案 ID" }, { status: 400 });
-  }
-
-  const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}?profile_id=eq.${encodeURIComponent(id)}`, {
-    method: "DELETE",
-    headers: {
-      ...supabaseHeaders(serviceRoleKey),
-      Prefer: "return=minimal",
-    },
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    return NextResponse.json({ error: getProviderError(payload) }, { status: 502 });
-  }
-
-  return NextResponse.json({ configured: true, deleted: true });
 }

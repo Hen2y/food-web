@@ -56,51 +56,68 @@ function toDatabaseRecord(record) {
   };
 }
 
-export async function GET() {
-  const { url, serviceRoleKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    return NextResponse.json({ configured: false, records: [] });
-  }
-
-  const response = await fetch(
-    `${url}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc&limit=200`,
-    { headers: supabaseHeaders(serviceRoleKey), cache: "no-store" }
-  );
-
-  const payload = await response.json().catch(() => []);
-  if (!response.ok) {
-    return NextResponse.json({ error: payload?.message || "读取 Supabase 记录失败" }, { status: 502 });
-  }
-
+function databaseUnavailable(message = "Supabase 记录暂不可用，已使用本地记录。") {
   return NextResponse.json({
-    configured: true,
-    records: Array.isArray(payload) ? payload.map(toClientRecord) : [],
+    configured: false,
+    records: [],
+    saved: false,
+    warning: message,
   });
 }
 
+export async function GET() {
+  try {
+    const { url, serviceRoleKey, configured } = getSupabaseConfig();
+    if (!configured) {
+      return NextResponse.json({ configured: false, records: [] });
+    }
+
+    const response = await fetch(
+      `${url}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc&limit=200`,
+      { headers: supabaseHeaders(serviceRoleKey), cache: "no-store" }
+    );
+
+    const payload = await response.json().catch(() => []);
+    if (!response.ok) {
+      return databaseUnavailable(payload?.message || "读取 Supabase 记录失败，已使用本地记录。");
+    }
+
+    return NextResponse.json({
+      configured: true,
+      records: Array.isArray(payload) ? payload.map(toClientRecord) : [],
+    });
+  } catch (error) {
+    return databaseUnavailable(error?.message || "Supabase 记录读取异常，已使用本地记录。");
+  }
+}
+
 export async function POST(request) {
-  const { url, serviceRoleKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    return NextResponse.json({ configured: false, saved: false });
+  try {
+    const { url, serviceRoleKey, configured } = getSupabaseConfig();
+    if (!configured) {
+      return NextResponse.json({ configured: false, saved: false });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const record = toDatabaseRecord(body.record || body);
+
+    const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}`, {
+      method: "POST",
+      headers: {
+        ...supabaseHeaders(serviceRoleKey),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(record),
+    });
+
+    const payload = await response.json().catch(() => []);
+    if (!response.ok) {
+      return NextResponse.json({ configured: false, saved: false, warning: payload?.message || "保存 Supabase 记录失败，已保存在本机。" });
+    }
+
+    const saved = Array.isArray(payload) && payload[0] ? toClientRecord(payload[0]) : null;
+    return NextResponse.json({ configured: true, saved: true, record: saved });
+  } catch (error) {
+    return NextResponse.json({ configured: false, saved: false, warning: error?.message || "Supabase 记录保存异常，已保存在本机。" });
   }
-
-  const body = await request.json().catch(() => ({}));
-  const record = toDatabaseRecord(body.record || body);
-
-  const response = await fetch(`${url}/rest/v1/${SUPABASE_TABLE}`, {
-    method: "POST",
-    headers: {
-      ...supabaseHeaders(serviceRoleKey),
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(record),
-  });
-
-  const payload = await response.json().catch(() => []);
-  if (!response.ok) {
-    return NextResponse.json({ error: payload?.message || "保存 Supabase 记录失败" }, { status: 502 });
-  }
-
-  const saved = Array.isArray(payload) && payload[0] ? toClientRecord(payload[0]) : null;
-  return NextResponse.json({ configured: true, saved: true, record: saved });
 }

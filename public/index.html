@@ -33,11 +33,11 @@
       --theme-shadow:31,54,74;
       --theme-overlay-a:7,11,16;
       --theme-overlay-b:12,18,25;
-      --surface-main:rgba(13,19,28,.58);
-      --surface-soft:rgba(16,24,36,.62);
-      --surface-muted:rgba(18,27,39,.58);
+      --surface-main:rgba(13,19,28,.48);
+      --surface-soft:rgba(16,24,36,.52);
+      --surface-muted:rgba(18,27,39,.46);
       --surface-strong:rgba(18,27,39,.92);
-      --surface-gradient:linear-gradient(180deg,rgba(13,19,28,.60),rgba(16,24,36,.64));
+      --surface-gradient:linear-gradient(180deg,rgba(13,19,28,.50),rgba(16,24,36,.54));
       --shadow:0 18px 54px rgba(0, 0, 0, .34);
       --soft-shadow:0 10px 30px rgba(0, 0, 0, .24);
       --radius:14px;
@@ -64,8 +64,8 @@
       z-index:0;
       pointer-events:none;
       background:
-        linear-gradient(90deg,rgba(var(--theme-overlay-a),.50),rgba(var(--theme-overlay-a),.24) 45%,rgba(var(--theme-overlay-b),.46)),
-        linear-gradient(180deg,rgba(var(--theme-overlay-a),.32),rgba(var(--theme-overlay-b),.50));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.34),rgba(var(--theme-overlay-a),.12) 45%,rgba(var(--theme-overlay-b),.30)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.20),rgba(var(--theme-overlay-b),.34));
       transition:background 1.2s ease;
     }
     .dish-bg{
@@ -81,7 +81,7 @@
       filter:saturate(1.02) contrast(.98);
     }
     .dish-bg.active{
-      opacity:.88;
+      opacity:.94;
       transform:scale(1);
     }
     .dish-bg::after{
@@ -89,8 +89,8 @@
       position:absolute;
       inset:0;
       background:
-        linear-gradient(90deg,rgba(var(--theme-overlay-a),.18),rgba(var(--theme-overlay-a),.04) 46%,rgba(var(--theme-overlay-a),.14)),
-        linear-gradient(180deg,rgba(var(--theme-overlay-a),.10),rgba(var(--theme-overlay-b),.26));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.10),rgba(var(--theme-overlay-a),.02) 46%,rgba(var(--theme-overlay-a),.08)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.05),rgba(var(--theme-overlay-b),.16));
     }
 
     button,input,select,textarea{font:inherit}
@@ -1274,7 +1274,7 @@
     .customer-alert,
     .ipad-shell,
     .image-modal-card{
-      background:var(--surface-main);
+      background:color-mix(in srgb,var(--surface-main) 72%, transparent);
       border-color:rgba(var(--theme-border),.72);
       color:var(--text);
       backdrop-filter:blur(18px);
@@ -1322,7 +1322,7 @@
     .hero-actions .btn-hero,
     .customer-time,
     .record-thumb-btn{
-      background:var(--surface-soft);
+      background:color-mix(in srgb,var(--surface-soft) 76%, transparent);
       border-color:rgba(var(--theme-border),.76);
       color:var(--text);
     }
@@ -1333,13 +1333,13 @@
       border-color:rgba(var(--theme-glow),.24);
     }
     .btn-ghost{
-      background:rgba(18,27,39,.94);
+      background:rgba(18,27,39,.90);
       border-color:rgba(var(--theme-border),.88);
       color:var(--text);
     }
     .upload-zone{
       background:
-        linear-gradient(180deg, color-mix(in srgb,var(--theme-primary) 10%, rgba(11,17,25,.58)),color-mix(in srgb,var(--theme-secondary) 10%, rgba(14,21,31,.70))),
+        linear-gradient(180deg, color-mix(in srgb,var(--theme-primary) 10%, rgba(11,17,25,.48)),color-mix(in srgb,var(--theme-secondary) 10%, rgba(14,21,31,.58))),
         repeating-linear-gradient(90deg, transparent 0 36px, rgba(var(--theme-glow),.05) 36px 37px),
         repeating-linear-gradient(0deg, transparent 0 36px, rgba(var(--theme-glow),.05) 36px 37px);
       border-color:rgba(var(--theme-border),.80);
@@ -1354,7 +1354,7 @@
     }
     .auto-panel,
     .image-editor{
-      background:var(--surface-gradient);
+      background:color-mix(in srgb,var(--surface-main) 74%, transparent);
     }
     .metric .icon,
     .mode-tag,
@@ -1370,7 +1370,7 @@
     tbody tr:hover,
     .customer-image,
     .image-modal-card img{
-      background:var(--surface-muted);
+      background:color-mix(in srgb,var(--surface-muted) 76%, transparent);
       border-color:rgba(var(--theme-border),.70);
     }
     .result-item{
@@ -2149,11 +2149,11 @@ function applyDishTheme(theme){
     "--theme-border": "54,68,82",
     "--theme-overlay-a": "7,11,16",
     "--theme-overlay-b": "12,18,25",
-    "--surface-main": `color-mix(in srgb, ${primary} 12%, rgba(13,19,28,.58))`,
-    "--surface-soft": `color-mix(in srgb, ${secondary} 12%, rgba(16,24,36,.62))`,
-    "--surface-muted": `color-mix(in srgb, ${primary} 10%, rgba(18,27,39,.58))`,
+    "--surface-main": `color-mix(in srgb, ${primary} 12%, rgba(13,19,28,.48))`,
+    "--surface-soft": `color-mix(in srgb, ${secondary} 12%, rgba(16,24,36,.52))`,
+    "--surface-muted": `color-mix(in srgb, ${primary} 10%, rgba(18,27,39,.46))`,
     "--surface-strong": `color-mix(in srgb, ${primary} 12%, rgba(18,27,39,.92))`,
-    "--surface-gradient": `linear-gradient(180deg,color-mix(in srgb, ${primary} 12%, rgba(13,19,28,.60)),color-mix(in srgb, ${secondary} 12%, rgba(16,24,36,.64)))`
+    "--surface-gradient": `linear-gradient(180deg,color-mix(in srgb, ${primary} 12%, rgba(13,19,28,.50)),color-mix(in srgb, ${secondary} 12%, rgba(16,24,36,.54)))`
   };
   Object.entries(pairs).forEach(([name,value])=>{
     if(value) root.style.setProperty(name,value);
