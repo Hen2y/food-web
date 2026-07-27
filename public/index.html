@@ -1429,6 +1429,79 @@
     .image-modal-card{
       background:#0d131c;
     }
+    /* Borderless preview: let panels read like floating text, while controls stay tactile. */
+    .sidebar,
+    .card,
+    .step-card,
+    .chip,
+    .auto-panel,
+    .image-editor,
+    .result-card,
+    .profile-card,
+    .big-status,
+    .customer-alert,
+    .ipad-shell,
+    .image-modal-card,
+    .mini-card,
+    .mode-tip,
+    .result-item,
+    .customer-image,
+    th,
+    td,
+    .brand,
+    .sidebar-footer,
+    .card-header,
+    .customer-head,
+    .customer-foot{
+      border-color:transparent !important;
+    }
+    .sidebar,
+    .card,
+    .step-card,
+    .auto-panel,
+    .image-editor,
+    .result-card,
+    .profile-card,
+    .big-status,
+    .customer-alert,
+    .ipad-shell,
+    .image-modal-card,
+    .mini-card,
+    .mode-tip,
+    .result-item,
+    .customer-image{
+      border-width:0 !important;
+    }
+    .card-header,
+    .brand,
+    .sidebar-footer,
+    .customer-head,
+    .customer-foot,
+    th,
+    td{
+      border-top-color:transparent !important;
+      border-bottom-color:transparent !important;
+    }
+    .btn,
+    .btn-ghost,
+    .mini-actions button,
+    .customer-project-btn,
+    .field input,
+    .field select,
+    .field textarea,
+    .select-row select,
+    .upload-zone,
+    .zoom-control button,
+    .record-thumb-btn,
+    .image-modal-close{
+      border-width:1px;
+      border-style:solid;
+      border-color:rgba(var(--theme-border),.78);
+    }
+    .btn-primary,
+    .btn-blue{
+      border-color:rgba(255,255,255,.24);
+    }
 
     @media (max-width:1180px){
       .app{grid-template-columns:92px 1fr}
