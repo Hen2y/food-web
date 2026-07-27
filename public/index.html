@@ -1935,8 +1935,9 @@ const state = {
 };
 const dishBackgrounds = [
   {
-    url:"/backgrounds/dish-bg-tray.jpg",
-    source:"Local tray meal image",
+    url:"https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1800&q=85",
+    fallbackUrl:"/backgrounds/dish-bg-tray.jpg",
+    source:"Unsplash fine dining restaurant table",
     theme:{
       primary:"#b8751b",
       primarySoft:"#fff3df",
@@ -1952,8 +1953,9 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"/backgrounds/dish-bg-1.jpg",
-    source:"Local dish image 1",
+    url:"https://images.unsplash.com/photo-1750943082012-efe6d2fd9e45?auto=format&fit=crop&w=1800&q=85",
+    fallbackUrl:"/backgrounds/dish-bg-1.jpg",
+    source:"Unsplash plated fine dining dish",
     theme:{
       primary:"#d46a32",
       primarySoft:"#fff0e8",
@@ -1969,8 +1971,9 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"/backgrounds/dish-bg-2.jpg",
-    source:"Local dish image 2",
+    url:"https://images.unsplash.com/photo-1753871486322-3a006a71e9b7?auto=format&fit=crop&w=1800&q=85",
+    fallbackUrl:"/backgrounds/dish-bg-2.jpg",
+    source:"Unsplash gourmet plating dish",
     theme:{
       primary:"#15976f",
       primarySoft:"#e8f8f2",
@@ -1986,8 +1989,9 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"/backgrounds/dish-bg-3.jpg",
-    source:"Local dish image 3",
+    url:"https://images.unsplash.com/photo-1669490048328-0d1e075a2b7c?auto=format&fit=crop&w=1800&q=85",
+    fallbackUrl:"/backgrounds/dish-bg-3.jpg",
+    source:"Unsplash elegant plated cuisine",
     theme:{
       primary:"#c88619",
       primarySoft:"#fff4dc",
@@ -2003,8 +2007,9 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"/backgrounds/dish-bg-chicken-tofu.jpg",
-    source:"Local chicken tofu image",
+    url:"https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=1800&q=85",
+    fallbackUrl:"/backgrounds/dish-bg-chicken-tofu.jpg",
+    source:"Unsplash fine dining salmon dish",
     theme:{
       primary:"#b96f22",
       primarySoft:"#fff0df",
@@ -2086,16 +2091,26 @@ async function setDishBackground(index, instant = false){
   if(!dishBackgrounds.length) return;
   const normalizedIndex = ((index % dishBackgrounds.length) + dishBackgrounds.length) % dishBackgrounds.length;
   const background = dishBackgrounds[normalizedIndex];
-  const url = background.url;
+  let url = background.url;
   const layers = [document.querySelector(".dish-bg-a"), document.querySelector(".dish-bg-b")];
   if(!layers[0] || !layers[1]) return;
   try{
     await preloadDishBackground(url);
   }catch(error){
-    if(dishBackgrounds.length > 1){
+    if(background.fallbackUrl){
+      url = background.fallbackUrl;
+      try{
+        await preloadDishBackground(url);
+      }catch(fallbackError){
+        if(dishBackgrounds.length > 1){
+          setDishBackground(normalizedIndex + 1, instant);
+        }
+        return;
+      }
+    }else if(dishBackgrounds.length > 1){
       setDishBackground(normalizedIndex + 1, instant);
+      return;
     }
-    return;
   }
   const nextLayerIndex = instant ? dishBackgroundActiveLayer : 1 - dishBackgroundActiveLayer;
   const nextLayer = layers[nextLayerIndex];
