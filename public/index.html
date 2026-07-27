@@ -64,8 +64,8 @@
       z-index:0;
       pointer-events:none;
       background:
-        linear-gradient(90deg,rgba(var(--theme-overlay-a),.82),rgba(var(--theme-overlay-a),.58) 45%,rgba(var(--theme-overlay-b),.76)),
-        linear-gradient(180deg,rgba(var(--theme-overlay-a),.66),rgba(var(--theme-overlay-b),.82));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.70),rgba(var(--theme-overlay-a),.42) 45%,rgba(var(--theme-overlay-b),.64)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.52),rgba(var(--theme-overlay-b),.70));
       transition:background 1.2s ease;
     }
     .dish-bg{
@@ -81,7 +81,7 @@
       filter:saturate(1.02) contrast(.98);
     }
     .dish-bg.active{
-      opacity:.68;
+      opacity:.76;
       transform:scale(1);
     }
     .dish-bg::after{
@@ -89,8 +89,8 @@
       position:absolute;
       inset:0;
       background:
-        linear-gradient(90deg,rgba(var(--theme-overlay-a),.44),rgba(var(--theme-overlay-a),.18) 46%,rgba(var(--theme-overlay-a),.38)),
-        linear-gradient(180deg,rgba(var(--theme-overlay-a),.30),rgba(var(--theme-overlay-b),.58));
+        linear-gradient(90deg,rgba(var(--theme-overlay-a),.34),rgba(var(--theme-overlay-a),.10) 46%,rgba(var(--theme-overlay-a),.28)),
+        linear-gradient(180deg,rgba(var(--theme-overlay-a),.20),rgba(var(--theme-overlay-b),.46));
     }
 
     button,input,select,textarea{font:inherit}
@@ -1935,8 +1935,8 @@ const state = {
 };
 const dishBackgrounds = [
   {
-    url:"https://foodish-api.com/images/biryani/biryani1.jpg",
-    source:"Foodish biryani image",
+    url:"/backgrounds/dish-bg-tray.jpg",
+    source:"Local tray meal image",
     theme:{
       primary:"#b8751b",
       primarySoft:"#fff3df",
@@ -1952,8 +1952,8 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"https://foodish-api.com/images/pasta/pasta1.jpg",
-    source:"Foodish pasta image",
+    url:"/backgrounds/dish-bg-1.jpg",
+    source:"Local dish image 1",
     theme:{
       primary:"#d46a32",
       primarySoft:"#fff0e8",
@@ -1969,8 +1969,8 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"https://foodish-api.com/images/rice/rice1.jpg",
-    source:"Foodish rice image",
+    url:"/backgrounds/dish-bg-2.jpg",
+    source:"Local dish image 2",
     theme:{
       primary:"#15976f",
       primarySoft:"#e8f8f2",
@@ -1986,8 +1986,8 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"https://foodish-api.com/images/dosa/dosa1.jpg",
-    source:"Foodish dosa image",
+    url:"/backgrounds/dish-bg-3.jpg",
+    source:"Local dish image 3",
     theme:{
       primary:"#c88619",
       primarySoft:"#fff4dc",
@@ -2003,8 +2003,8 @@ const dishBackgrounds = [
     }
   },
   {
-    url:"https://foodish-api.com/images/samosa/samosa1.jpg",
-    source:"Foodish samosa image",
+    url:"/backgrounds/dish-bg-chicken-tofu.jpg",
+    source:"Local chicken tofu image",
     theme:{
       primary:"#b96f22",
       primarySoft:"#fff0df",
@@ -2092,6 +2092,9 @@ async function setDishBackground(index, instant = false){
   try{
     await preloadDishBackground(url);
   }catch(error){
+    if(dishBackgrounds.length > 1){
+      setDishBackground(normalizedIndex + 1, instant);
+    }
     return;
   }
   const nextLayerIndex = instant ? dishBackgroundActiveLayer : 1 - dishBackgroundActiveLayer;
