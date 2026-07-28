@@ -1984,12 +1984,9 @@
                 <h3>學校菜單參考庫</h3>
                 <span>用網上食物照片暫時模擬學校菜單，AI 會把啟用的菜品作為識別參考</span>
               </div>
-              <span class="status-pill safe" id="menuEnabledCount">0 道已啟用</span>
+              <span class="status-pill safe" id="menuEnabledCount">0 道菜品</span>
             </div>
             <div class="card-pad">
-              <div class="menu-note">
-                <strong>用途：</strong>當餐盤圖片像菜單中的菜時，AI 會參考這裡的菜名、食材和隐藏过敏源。這不是直接給 AI 標準答案，而是讓它更像在對接學校今日菜單。
-              </div>
               <div class="menu-grid" id="schoolMenuGrid"></div>
             </div>
           </div>
@@ -3838,7 +3835,7 @@ function renderSchoolMenu(){
   if(!grid) return;
   const menu = Array.isArray(state.schoolMenu) ? state.schoolMenu : [];
   const enabledCount = menu.filter(item=>item.enabled !== false).length;
-  if(counter) counter.textContent = `${enabledCount} 道已啟用`;
+  if(counter) counter.textContent = `${menu.length} 道菜品`;
   grid.innerHTML = menu.map(item=>`
     <article class="menu-card ${item.enabled === false ? "off" : ""}">
       <div class="menu-photo">
@@ -3848,7 +3845,7 @@ function renderSchoolMenu(){
       <div class="menu-body">
         <div class="menu-title">
           <h4>${escapeHtml(item.name || "未命名菜品")}</h4>
-          <button class="menu-switch" type="button" onclick="toggleMenuItem('${escapeHtml(item.id)}')">${item.enabled === false ? "未參考" : "AI參考"}</button>
+          <button class="menu-switch" type="button" onclick="toggleMenuItem('${escapeHtml(item.id)}')">${item.enabled === false ? "停用" : "啟用"}</button>
         </div>
         <div class="menu-tags">
           ${(item.allergens || []).slice(0,4).map(tag=>`<span>${escapeHtml(tag)}</span>`).join("")}
