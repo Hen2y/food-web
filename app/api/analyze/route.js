@@ -150,6 +150,12 @@ function buildMenuReferenceText(menuItems = []) {
   ].filter(Boolean).join("\n")).join("\n");
 }
 
+function sanitizeMenuScanItem(menuScanItem) {
+  if (!menuScanItem || typeof menuScanItem !== "object") return null;
+  const [item] = sanitizeMenuItems([{ ...menuScanItem, enabled: true }]);
+  return item || null;
+}
+
 function getProviderErrorMessage(payload, status) {
   const raw = String(payload?.error?.message || payload?.message || "");
   if (/quota|exceeded|insufficient|余额|额度|用量|欠费/i.test(raw)) {
@@ -169,7 +175,7 @@ export async function POST(request) {
     if (!process.env.MOONSHOT_API_KEY) {
       return NextResponse.json({ error: "尚未配置 MOONSHOT_API_KEY" }, { status: 503 });
     }
-    const { image, allergens = [], menuItems = [] } = await request.json();
+    const { image, allergens = [], menuItems = [], menuScanItem = null } = await request.json();
     if (typeof image !== "string" || !image.startsWith("data:image/") || image.length > MAX_IMAGE_LENGTH) {
       return NextResponse.json({ error: "请上传不超过约 7MB 的图片" }, { status: 400 });
     }
@@ -179,6 +185,7 @@ export async function POST(request) {
       ? dishKnowledge.map((item) => `${item.dish}：${item.note}`).join("\n")
       : "无特别匹配的菜品知识；仍需按常见菜品和配料推断隐藏过敏源。";
     const menuReferenceText = buildMenuReferenceText(menuItems);
+    const activeMenuScanItem = sanitizeMenuScanItem(menuScanItem);
 
     const baseUrl = (process.env.MOONSHOT_BASE_URL || "https://api.moonshot.cn/v1").replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -206,6 +213,9 @@ export async function POST(request) {
                     : "没有匹配到内置扩展词库时，请只按用户原始输入检查。",
                   `内置菜品知识库：\n${dishKnowledgeText}`,
                   `学校菜单参考（模拟对接学校菜单；如果图片中的餐食像这些菜，请优先参考其食材和隐藏过敏源，但不要强行套用）：\n${menuReferenceText}`,
+                  activeMenuScanItem
+                    ? `当前图片是学校菜单中的参考图片：${activeMenuScanItem.name}。请优先按这道菜的食材和隐藏过敏源复核；如果图片明显不符，仍需说明不确定。`
+                    : "当前图片不是从学校菜单参考图直接载入，按普通餐盘图片识别。",
                   "请优先标出与登记过敏原或扩展词相关的可见风险；对隐藏成分只给风险提示，不要把不确定内容说成确定。",
                   "识别菜品名时要考虑同形不同料：鸡豆花看起来像白色豆腐/豆花，但通常不是豆腐，而是鸡肉/蛋清制成；如果画面是白色细嫩块状物浸在清汤里、带红色点缀和绿叶装饰，应把鸡豆花作为候选菜名，并检查鸡肉/蛋清隐藏过敏源。",
                   "请用常识复核结果：若透明/反光物位于米饭、热菜、汤菜中，不要标为冰块；应作为疑似透明异物处理，并提醒人工确认是否为玻璃、塑料或其他异物。",

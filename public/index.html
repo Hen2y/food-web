@@ -2151,6 +2151,7 @@ const state = {
   risk: "low",
   score: 0,
   person: "访客模式",
+  menuScanItemId: "",
   summary: "尚未提交 AI 检测。",
   alerts: [],
   profiles: [
@@ -2166,7 +2167,7 @@ const state = {
       name:"鸡豆花",
       category:"汤菜",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_chicken_tofu.jpg",
       ingredients:["鸡胸肉","蛋清","高汤","淀粉","绿叶点缀"],
       allergens:["鸡肉","蛋清","鸡蛋","小麦/淀粉"],
       note:"外观看起来像豆腐或豆花，但通常由鸡蓉和蛋清制成；不要仅凭白色嫩块外观判断为豆腐。"
@@ -2176,7 +2177,7 @@ const state = {
       name:"宫保鸡丁",
       category:"热菜",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_kungpao.jpg",
       ingredients:["鸡肉","花生","辣椒","葱","酱油"],
       allergens:["鸡肉","花生","大豆","小麦"],
       note:"如果登记花生或鸡肉过敏，应重点提示；酱油也可能带入大豆/小麦。"
@@ -2186,7 +2187,7 @@ const state = {
       name:"麻婆豆腐",
       category:"热菜",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_mapo_tofu.jpg",
       ingredients:["豆腐","肉末","豆瓣酱","花椒","酱油"],
       allergens:["大豆","豆腐","小麦","猪肉/牛肉"],
       note:"主要关注大豆/豆腐，豆瓣酱和酱油可能含大豆或小麦；肉末种类需现场确认。"
@@ -2196,7 +2197,7 @@ const state = {
       name:"云吞汤面",
       category:"面食",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_wonton_noodle.jpg",
       ingredients:["面条","云吞皮","猪肉馅","虾仁可能","青菜"],
       allergens:["小麦","麸质","虾","猪肉","鸡蛋"],
       note:"云吞外皮通常含小麦，馅料可能含猪肉、虾或蛋；图像看不到馅料时应提示询问食堂。"
@@ -2206,27 +2207,27 @@ const state = {
       name:"清蒸鱼",
       category:"鱼类",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_steamed_fish.jpg",
       ingredients:["鱼","葱","姜","酱油","香菜"],
       allergens:["鱼类","大豆","小麦"],
       note:"整鱼的鱼头、鱼尾、鱼皮、鱼骨通常属于菜品本身；鱼类过敏时才作为过敏风险重点。"
     },
     {
       id:"menu_tomato_egg",
-      name:"番茄炒蛋",
+      name:"番茄蛋炒饭",
       category:"热菜",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=900&q=80",
-      ingredients:["鸡蛋","番茄","葱","食用油"],
+      image:"/images/menu/menu_tomato_egg.jpg",
+      ingredients:["米饭","鸡蛋","番茄/番茄酱","葱","食用油"],
       allergens:["鸡蛋","蛋类"],
-      note:"黄色块状物通常是鸡蛋，不要只当作普通蔬菜；蛋类过敏需要提示。"
+      note:"图片更接近番茄蛋炒饭/蛋类主食；黄色蛋块和米饭都应作为菜品内容识别，蛋类过敏需要提示。"
     },
     {
       id:"menu_salad",
       name:"蔬菜沙拉",
       category:"冷菜",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_salad.jpg",
       ingredients:["生菜","番茄","黄瓜","芝麻酱/蛋黄酱可能","坚果碎可能"],
       allergens:["芝麻","鸡蛋","坚果","花生"],
       note:"沙拉的风险常来自酱料和配料碎，不一定能直接看见；需提醒询问食堂。"
@@ -2236,13 +2237,18 @@ const state = {
       name:"奶油蘑菇汤",
       category:"汤品",
       enabled:true,
-      image:"https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=900&q=80",
+      image:"/images/menu/menu_cream_soup.jpg",
       ingredients:["蘑菇","牛奶","奶油","黄油","小麦粉可能"],
       allergens:["牛奶","乳制品","小麦"],
       note:"白色浓汤常含牛奶/奶油/黄油，也可能用小麦粉增稠。"
     }
   ]
 };
+const defaultSchoolMenu = state.schoolMenu.map(item=>({
+  ...item,
+  ingredients:[...(item.ingredients || [])],
+  allergens:[...(item.allergens || [])]
+}));
 const dishBackgrounds = [
   {
     url:"https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1800&q=85",
@@ -2514,6 +2520,7 @@ async function handleManualImageSelected(e){
     const compressed = await compressImage(file);
     resetManualImageEditor(compressed, true);
     state.image = compressed;
+    state.menuScanItemId = "";
     state.analyzed = false;
     setPreview(state.image);
     syncState();
@@ -2590,6 +2597,7 @@ function captureManualCameraPhoto(){
     stopManualCamera();
     resetManualImageEditor(captured, true);
     state.image = captured;
+    state.menuScanItemId = "";
     state.analyzed = false;
     setPreview(state.image);
     syncState();
@@ -2709,6 +2717,7 @@ async function applyManualImageEdit(){
     const edited = await renderEditedManualImage();
     if(!edited) return;
     state.image = edited;
+    state.menuScanItemId = "";
     state.analyzed = false;
     document.getElementById("uploadZone").classList.remove("analyzed");
     document.getElementById("bboxLayer").innerHTML = "";
@@ -2753,6 +2762,7 @@ function clearManualPhotoForRetake(){
   stopManualCamera();
   resetManualImageEditor("", false);
   state.image = "";
+  state.menuScanItemId = "";
   state.analyzed = false;
   state.risk = "low";
   state.score = 0;
@@ -2874,6 +2884,7 @@ function setPreview(src){
 function prepareAutoProjectionWaiting(){
   resetManualImageEditor("", false);
   state.image = "";
+  state.menuScanItemId = "";
   state.analyzed = false;
   state.risk = "low";
   state.score = 0;
@@ -2927,7 +2938,8 @@ async function analyzePlate(options = {}){
       body:JSON.stringify({
         image:state.image,
         allergens:profile ? profile.allergens : [],
-        menuItems:getEnabledSchoolMenuItems()
+        menuItems:getEnabledSchoolMenuItems(),
+        menuScanItem:getActiveMenuScanItem()
       }),
       signal:controller.signal
     });
@@ -3511,6 +3523,7 @@ async function captureAndAnalyzeAuto(){
   autoState.lastCaptureSignature = autoState.currentSignature ? [...autoState.currentSignature] : null;
   resetManualImageEditor("", false);
   state.image = captureAutoImage();
+  state.menuScanItemId = "";
   setPreview(state.image);
   document.getElementById("uploadZone").classList.add("auto-live", "auto-review");
   autoState.lastAnalyzeAt = Date.now();
@@ -3826,6 +3839,19 @@ function renderTables(){
 
 let editingProfileId = null;
 
+function mergeSchoolMenuWithDefaults(savedMenu = []){
+  const savedById = new Map((Array.isArray(savedMenu) ? savedMenu : [])
+    .filter(item=>item && item.id)
+    .map(item=>[item.id, item]));
+  return defaultSchoolMenu.map(defaultItem=>{
+    const saved = savedById.get(defaultItem.id) || {};
+    return {
+      ...defaultItem,
+      enabled: saved.enabled === false ? false : defaultItem.enabled !== false
+    };
+  });
+}
+
 function getEnabledSchoolMenuItems(){
   return (state.schoolMenu || [])
     .filter(item=>item && item.enabled !== false)
@@ -3837,6 +3863,19 @@ function getEnabledSchoolMenuItems(){
       allergens:Array.isArray(item.allergens) ? item.allergens : [],
       note:item.note || ""
     }));
+}
+
+function getActiveMenuScanItem(){
+  const item = (state.schoolMenu || []).find(menuItem=>menuItem.id === state.menuScanItemId);
+  if(!item) return null;
+  return {
+    id:item.id,
+    name:item.name,
+    category:item.category,
+    ingredients:Array.isArray(item.ingredients) ? item.ingredients : [],
+    allergens:Array.isArray(item.allergens) ? item.allergens : [],
+    note:item.note || ""
+  };
 }
 
 function renderSchoolMenu(){
@@ -3889,6 +3928,7 @@ async function loadMenuImageForScan(id){
     if(autoState.enabled) stopAutoMode();
     showToast(`正在载入 ${item.name} 的菜单图片...`);
     state.image = await loadImageAsDataUrl(item.image);
+    state.menuScanItemId = item.id;
     resetManualImageEditor(state.image, true);
     state.analyzed = false;
     state.risk = "low";
@@ -4200,6 +4240,7 @@ async function loadSample(){
   try{
     showToast("正在载入示范餐盘...");
     state.image = await loadImageAsDataUrl("/images/sample-tray.jpeg");
+    state.menuScanItemId = "";
     resetManualImageEditor(state.image, true);
     state.analyzed = false;
     document.getElementById("bboxLayer").innerHTML = "";
@@ -4242,6 +4283,7 @@ async function initMode(){
   startDishBackgroundRotation();
   const synced = getSyncedState();
   Object.assign(state, synced, {dataVersion: 3});
+  state.schoolMenu = mergeSchoolMenuWithDefaults(state.schoolMenu);
   // 顾客屏幕不需要等待 Supabase 历史记录。线上数据库唤醒较慢时，
   // 先 await 会让新窗口长时间停在操作台，看起来像“投影没反应”。
   if(location.hash === "#customer"){
