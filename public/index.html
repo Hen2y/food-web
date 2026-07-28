@@ -993,6 +993,16 @@
       background:rgba(255,255,255,.10);
       color:var(--muted);
     }
+    .menu-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:auto;
+    }
+    .menu-actions .menu-switch{
+      flex:1;
+      min-width:86px;
+    }
     .menu-tags{
       display:flex;
       flex-wrap:wrap;
@@ -3852,6 +3862,9 @@ function renderSchoolMenu(){
         </div>
         <p><strong>食材：</strong>${escapeHtml((item.ingredients || []).join("、") || "未填写")}</p>
         <p>${escapeHtml(item.note || "暂无识别备注。")}</p>
+        <div class="menu-actions">
+          <button class="menu-switch" type="button" onclick="loadMenuImageForScan('${escapeHtml(item.id)}')">識別此圖</button>
+        </div>
       </div>
     </article>
   `).join("") || `<div class="empty"><h4>暂无菜单</h4><p>之后可以把学校真实菜单接进这里。</p></div>`;
@@ -3863,7 +3876,36 @@ function toggleMenuItem(id){
   item.enabled = item.enabled === false;
   renderSchoolMenu();
   syncState();
-  showToast(item.enabled ? `${item.name} 已加入 AI 菜单参考` : `${item.name} 已暂不参与 AI 参考`);
+  showToast(item.enabled ? `${item.name} 已启用` : `${item.name} 已停用`);
+}
+
+async function loadMenuImageForScan(id){
+  const item = (state.schoolMenu || []).find(menuItem=>menuItem.id === id);
+  if(!item || !item.image){
+    showToast("这道菜没有可识别的参考图片");
+    return;
+  }
+  try{
+    if(autoState.enabled) stopAutoMode();
+    showToast(`正在载入 ${item.name} 的菜单图片...`);
+    state.image = await loadImageAsDataUrl(item.image);
+    resetManualImageEditor(state.image, true);
+    state.analyzed = false;
+    state.risk = "low";
+    state.score = 0;
+    state.summary = `已载入学校菜单参考图片：${item.name}`;
+    state.alerts = [];
+    state.detections = [];
+    document.getElementById("bboxLayer").innerHTML = "";
+    setPreview(state.image);
+    renderResults();
+    renderDashboardResult();
+    syncState();
+    switchPage("scan");
+    showToast(`已载入 ${item.name}，确认后可提交 AI 读取`);
+  }catch(error){
+    showToast(error.message || "菜单图片加载失败，请换一张图片链接");
+  }
 }
 
 function renderProfiles(){
@@ -4137,6 +4179,8 @@ function updateCustomerScreen(){
 function loadImageAsDataUrl(src){
   return new Promise((resolve,reject)=>{
     const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.referrerPolicy = "no-referrer";
     image.onload = ()=>{
       const maxSide = 1100;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
@@ -4147,7 +4191,7 @@ function loadImageAsDataUrl(src){
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       resolve(canvas.toDataURL("image/jpeg", .78));
     };
-    image.onerror = ()=>reject(new Error("示范餐盘图片加载失败"));
+    image.onerror = ()=>reject(new Error("图片加载失败"));
     image.src = src;
   });
 }
