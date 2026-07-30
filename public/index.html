@@ -2249,7 +2249,7 @@ const defaultSchoolMenu = state.schoolMenu.map(item=>({
   ingredients:[...(item.ingredients || [])],
   allergens:[...(item.allergens || [])]
 }));
-const menuImageVersion = "20260730a";
+const menuImageVersion = "20260730b";
 const dishBackgrounds = [
   {
     url:"https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1800&q=85",
@@ -3944,7 +3944,7 @@ async function loadMenuImageForScan(id){
   try{
     if(autoState.enabled) stopAutoMode();
     showToast(`正在载入 ${item.name} 的菜单图片...`);
-    state.image = await loadImageAsDataUrl(versionedMenuImageUrl(item.image));
+    state.image = await loadMenuImageDataUrl(item);
     state.menuScanItemId = item.id;
     resetManualImageEditor(state.image, true);
     state.analyzed = false;
@@ -3962,6 +3962,18 @@ async function loadMenuImageForScan(id){
     showToast(`已载入 ${item.name}，确认后可提交 AI 读取`);
   }catch(error){
     showToast(error.message || "菜单图片加载失败，请换一张图片链接");
+  }
+}
+
+async function loadMenuImageDataUrl(item){
+  try{
+    const response = await fetch(`/api/menu-image?id=${encodeURIComponent(item.id)}&v=${menuImageVersion}`, {cache:"no-store"});
+    const data = await response.json().catch(()=>({}));
+    if(!response.ok || !data.dataUrl) throw new Error(data.error || "菜单图片接口读取失败");
+    return data.dataUrl;
+  }catch(error){
+    console.warn("menu image api fallback", error);
+    return loadImageAsDataUrl(versionedMenuImageUrl(item.image));
   }
 }
 
