@@ -2249,6 +2249,7 @@ const defaultSchoolMenu = state.schoolMenu.map(item=>({
   ingredients:[...(item.ingredients || [])],
   allergens:[...(item.allergens || [])]
 }));
+const menuImageVersion = "20260730a";
 const dishBackgrounds = [
   {
     url:"https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1800&q=85",
@@ -3878,6 +3879,22 @@ function getActiveMenuScanItem(){
   };
 }
 
+function versionedMenuImageUrl(src){
+  const value = String(src || "");
+  if(!value) return "";
+  if(!value.startsWith("/images/menu/")) return value;
+  return `${value}${value.includes("?") ? "&" : "?"}v=${menuImageVersion}`;
+}
+
+function retryMenuImage(img){
+  if(!img || img.dataset.retried === "1") return;
+  img.dataset.retried = "1";
+  const cleanSrc = String(img.dataset.cleanSrc || img.src || "").split("?")[0];
+  setTimeout(()=>{
+    img.src = `${cleanSrc}?v=${menuImageVersion}-${Date.now()}`;
+  }, 250);
+}
+
 function renderSchoolMenu(){
   const grid = document.getElementById("schoolMenuGrid");
   const counter = document.getElementById("menuEnabledCount");
@@ -3888,7 +3905,7 @@ function renderSchoolMenu(){
   grid.innerHTML = menu.map(item=>`
     <article class="menu-card ${item.enabled === false ? "off" : ""}">
       <div class="menu-photo">
-        <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name || "菜品照片")}" loading="lazy" />
+        <img src="${escapeHtml(versionedMenuImageUrl(item.image || ""))}" data-clean-src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name || "菜品照片")}" loading="lazy" onerror="retryMenuImage(this)" />
         <span class="menu-category">${escapeHtml(item.category || "菜品")}</span>
       </div>
       <div class="menu-body">
@@ -3927,7 +3944,7 @@ async function loadMenuImageForScan(id){
   try{
     if(autoState.enabled) stopAutoMode();
     showToast(`正在载入 ${item.name} 的菜单图片...`);
-    state.image = await loadImageAsDataUrl(item.image);
+    state.image = await loadImageAsDataUrl(versionedMenuImageUrl(item.image));
     state.menuScanItemId = item.id;
     resetManualImageEditor(state.image, true);
     state.analyzed = false;
