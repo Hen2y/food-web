@@ -2145,7 +2145,7 @@
 
 <script>
 const state = {
-  dataVersion: 6,
+  dataVersion: 7,
   image: "",
   analyzed: false,
   risk: "low",
@@ -2646,7 +2646,7 @@ function parseJsonResponse(text){
   }
 }
 
-function postAnalyzeWithXhr(bodyText, requestId, signal){
+function postJsonWithXhr(url, bodyText, requestId, signal){
   return new Promise((resolve,reject)=>{
     const xhr = new XMLHttpRequest();
     let settled = false;
@@ -2664,8 +2664,8 @@ function postAnalyzeWithXhr(bodyText, requestId, signal){
       const error = new DOMException("请求已取消", "AbortError");
       finish(reject, error);
     };
-    xhr.open("POST", new URL("/api/analyze", location.origin).href, true);
-    xhr.timeout = 150000;
+    xhr.open("POST", new URL(url, location.origin).href, true);
+    xhr.timeout = 30000;
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.setRequestHeader("X-SafePlate-Request", String(requestId));
     xhr.setRequestHeader("X-SafePlate-Transport", "xhr-fallback");
@@ -2678,18 +2678,18 @@ function postAnalyzeWithXhr(bodyText, requestId, signal){
       });
     };
     xhr.onerror = ()=>finish(reject, new Error("XHR fallback network error"));
-    xhr.ontimeout = ()=>finish(reject, new Error("AI 请求超过 150 秒，请稍后重试"));
+    xhr.ontimeout = ()=>finish(reject, new Error("创建 AI 任务超时，请稍后重试"));
     if(signal?.aborted) return abort();
     signal?.addEventListener?.("abort", abort, {once:true});
     xhr.send(bodyText);
   });
 }
 
-async function postAnalyzeRequest(body, requestId, signal){
+async function postJsonWithFallback(url, body, requestId, signal){
   const bodyText = JSON.stringify(body);
-  const url = new URL("/api/analyze", location.origin).href;
+  const absoluteUrl = new URL(url, location.origin).href;
   try{
-    const response = await fetch(url, {
+    const response = await fetch(absoluteUrl, {
       method:"POST",
       headers:{
         "Content-Type":"application/json",
@@ -2705,8 +2705,64 @@ async function postAnalyzeRequest(body, requestId, signal){
   }catch(error){
     if(error?.name === "AbortError") throw error;
     showToast("浏览器请求失败，正在使用备用通道重试...");
-    return postAnalyzeWithXhr(bodyText, requestId, signal);
+    return postJsonWithXhr(url, bodyText, requestId, signal);
   }
+}
+
+async function pollAnalyzeJob(jobId, requestId, signal){
+  const startedAt = Date.now();
+  const timeoutMs = 165000;
+  while(Date.now() - startedAt < timeoutMs){
+    if(signal?.aborted) throw new DOMException("请求已取消", "AbortError");
+    await delay(1400);
+    const response = await fetch(`/api/analyze-job?id=${encodeURIComponent(jobId)}&r=${requestId}-${Date.now()}`, {
+      method:"GET",
+      cache:"no-store",
+      signal
+    });
+    const data = await response.json().catch(()=>({}));
+    if(data.status === "done"){
+      return {
+        ok:true,
+        status:200,
+        transport:"job",
+        json:async()=>data.result || {}
+      };
+    }
+    if(data.status === "error" || !response.ok){
+      return {
+        ok:false,
+        status:response.status || 500,
+        transport:"job",
+        json:async()=>({error:data.error || "AI 后台任务失败"})
+      };
+    }
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    if(elapsed > 0 && elapsed % 10 === 0){
+      document.getElementById("analyzeBtnText").textContent = `AI 分析中...${elapsed}s`;
+    }
+  }
+  return {
+    ok:false,
+    status:504,
+    transport:"job",
+    json:async()=>({error:"AI 后台任务超过 165 秒，请稍后重试"})
+  };
+}
+
+async function postAnalyzeRequest(body, requestId, signal){
+  const startResponse = await postJsonWithFallback("/api/analyze-job", {payload:body}, requestId, signal);
+  const startData = await startResponse.json().catch(()=>({}));
+  if(!startResponse.ok || !startData.jobId){
+    return {
+      ok:false,
+      status:startResponse.status || 500,
+      transport:startResponse.transport || "job-start",
+      json:async()=>({error:startData.error || "无法创建 AI 后台任务"})
+    };
+  }
+  showToast("AI 后台任务已创建，正在等待结果...");
+  return pollAnalyzeJob(startData.jobId, requestId, signal);
 }
 
 function shrinkDataUrlForAi(src){
