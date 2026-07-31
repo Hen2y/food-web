@@ -3,6 +3,20 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const SUPABASE_TABLE = "scan_records";
+const RECORD_LIST_COLUMNS = [
+  "id",
+  "date_iso",
+  "time_label",
+  "person",
+  "result",
+  "notice",
+  "status",
+  "risk",
+  "score",
+  "allergen_hit",
+  "summary",
+  "created_at",
+].join(",");
 
 function getSupabaseConfig() {
   const url = (process.env.SUPABASE_URL || "")
@@ -73,7 +87,7 @@ export async function GET() {
     }
 
     const response = await fetch(
-      `${url}/rest/v1/${SUPABASE_TABLE}?select=*&order=created_at.desc&limit=200`,
+      `${url}/rest/v1/${SUPABASE_TABLE}?select=${RECORD_LIST_COLUMNS}&order=created_at.desc&limit=50`,
       { headers: supabaseHeaders(serviceRoleKey), cache: "no-store" }
     );
 
