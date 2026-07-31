@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { expandAllergens } from "./allergenLexicon.js";
 import { addDishDerivedDetections, buildDishKnowledge } from "./dishKnowledge.js";
 
 export const runtime = "nodejs";
 
 const MAX_IMAGE_LENGTH = 10 * 1024 * 1024;
+const MENU_IMAGE_FILES = {
+  menu_chicken_tofu: "menu_chicken_tofu.jpg",
+  menu_kungpao: "menu_kungpao.jpg",
+  menu_mapo_tofu: "menu_mapo_tofu.jpg",
+  menu_wonton_noodle: "menu_wonton_noodle.jpg",
+  menu_steamed_fish: "menu_steamed_fish.jpg",
+  menu_tomato_egg: "menu_tomato_egg.jpg",
+  menu_salad: "menu_salad.jpg",
+  menu_cream_soup: "menu_cream_soup.jpg",
+};
 const SYSTEM_PROMPT = `你是校园食堂的餐盘图像初筛助手。你的结果只能作为风险提示，不能代替人工检查或医疗诊断。
 请根据图片识别：1. 可见食物/配料；2. 可能引发过敏的食材；3. 可能有害的异物（玻璃、金属、硬塑料、头发、苍蝇/蟑螂等昆虫、包装残留、清洁用品残留等）。
 过敏原和有害异物是同等重要的两类任务。必须完整检查整个餐盘，不能因为发现了过敏原就停止寻找异物，也不能只在用户登记了过敏原时才检查异物。
@@ -156,6 +168,13 @@ function sanitizeMenuScanItem(menuScanItem) {
   return item || null;
 }
 
+async function getMenuImageDataUrl(menuImageId) {
+  const filename = MENU_IMAGE_FILES[String(menuImageId || "").trim()];
+  if (!filename) return "";
+  const file = await readFile(path.join(process.cwd(), "public", "images", "menu", filename));
+  return `data:image/jpeg;base64,${file.toString("base64")}`;
+}
+
 function getProviderErrorMessage(payload, status) {
   const raw = String(payload?.error?.message || payload?.message || "");
   if (/quota|exceeded|insufficient|余额|额度|用量|欠费/i.test(raw)) {
@@ -175,8 +194,10 @@ export async function POST(request) {
     if (!process.env.MOONSHOT_API_KEY) {
       return NextResponse.json({ error: "尚未配置 MOONSHOT_API_KEY" }, { status: 503 });
     }
-    const { image, allergens = [], menuItems = [], menuScanItem = null } = await request.json();
-    if (typeof image !== "string" || !image.startsWith("data:image/") || image.length > MAX_IMAGE_LENGTH) {
+    const { image = "", menuImageId = "", allergens = [], menuItems = [], menuScanItem = null } = await request.json();
+    const serverMenuImage = await getMenuImageDataUrl(menuImageId);
+    const analysisImage = serverMenuImage || image;
+    if (typeof analysisImage !== "string" || !analysisImage.startsWith("data:image/") || analysisImage.length > MAX_IMAGE_LENGTH) {
       return NextResponse.json({ error: "请上传不超过约 7MB 的图片" }, { status: 400 });
     }
     const allergenContext = expandAllergens(allergens);
@@ -225,7 +246,7 @@ export async function POST(request) {
                   "请保持风险分一致：low=0-34，medium=35-69，high=70-100。过敏原 confidence>=0.88 或明确有害异物 confidence>=0.82 时必须 high，不能仍给中风险。",
                 ].join("\n"),
               },
-              { type: "image_url", image_url: { url: image } },
+              { type: "image_url", image_url: { url: analysisImage } },
             ],
           },
         ],

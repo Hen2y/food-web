@@ -2933,14 +2933,16 @@ async function analyzePlate(options = {}){
 
   try{
     const profile = getSelectedProfile();
+    const activeMenuScanItem = getActiveMenuScanItem();
     const response = await fetch("/api/analyze", {
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        image:state.image,
+        image:state.menuScanItemId ? "" : state.image,
+        menuImageId:state.menuScanItemId || "",
         allergens:profile ? profile.allergens : [],
         menuItems:getEnabledSchoolMenuItems(),
-        menuScanItem:getActiveMenuScanItem()
+        menuScanItem:activeMenuScanItem
       }),
       signal:controller.signal
     });
