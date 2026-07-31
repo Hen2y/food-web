@@ -2145,7 +2145,7 @@
 
 <script>
 const state = {
-  dataVersion: 5,
+  dataVersion: 6,
   image: "",
   analyzed: false,
   risk: "low",
@@ -2638,6 +2638,77 @@ function imageDataLabel(src){
   return `${Math.round(length / 1024)}KB`;
 }
 
+function parseJsonResponse(text){
+  try{
+    return text ? JSON.parse(text) : {};
+  }catch(error){
+    return {};
+  }
+}
+
+function postAnalyzeWithXhr(bodyText, requestId, signal){
+  return new Promise((resolve,reject)=>{
+    const xhr = new XMLHttpRequest();
+    let settled = false;
+    const cleanup = ()=>{
+      signal?.removeEventListener?.("abort", abort);
+    };
+    const finish = (fn, value)=>{
+      if(settled) return;
+      settled = true;
+      cleanup();
+      fn(value);
+    };
+    const abort = ()=>{
+      try{xhr.abort();}catch(e){}
+      const error = new DOMException("请求已取消", "AbortError");
+      finish(reject, error);
+    };
+    xhr.open("POST", new URL("/api/analyze", location.origin).href, true);
+    xhr.timeout = 150000;
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.setRequestHeader("X-SafePlate-Request", String(requestId));
+    xhr.setRequestHeader("X-SafePlate-Transport", "xhr-fallback");
+    xhr.onload = ()=>{
+      finish(resolve, {
+        ok:xhr.status >= 200 && xhr.status < 300,
+        status:xhr.status,
+        transport:"xhr",
+        json:async()=>parseJsonResponse(xhr.responseText)
+      });
+    };
+    xhr.onerror = ()=>finish(reject, new Error("XHR fallback network error"));
+    xhr.ontimeout = ()=>finish(reject, new Error("AI 请求超过 150 秒，请稍后重试"));
+    if(signal?.aborted) return abort();
+    signal?.addEventListener?.("abort", abort, {once:true});
+    xhr.send(bodyText);
+  });
+}
+
+async function postAnalyzeRequest(body, requestId, signal){
+  const bodyText = JSON.stringify(body);
+  const url = new URL("/api/analyze", location.origin).href;
+  try{
+    const response = await fetch(url, {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "X-SafePlate-Request": String(requestId),
+        "X-SafePlate-Transport": "fetch"
+      },
+      body:bodyText,
+      cache:"no-store",
+      signal
+    });
+    response.transport = "fetch";
+    return response;
+  }catch(error){
+    if(error?.name === "AbortError") throw error;
+    showToast("浏览器请求失败，正在使用备用通道重试...");
+    return postAnalyzeWithXhr(bodyText, requestId, signal);
+  }
+}
+
 function shrinkDataUrlForAi(src){
   return new Promise((resolve,reject)=>{
     if(!src || !src.startsWith("data:image/")) return resolve(src || "");
@@ -2983,23 +3054,18 @@ async function analyzePlate(options = {}){
     const activeMenuScanItem = getActiveMenuScanItem();
     const imageForAnalyze = await prepareAnalyzeImageForRequest();
     const requestDebug = `请求 ${requestId}｜${state.menuScanItemId ? `菜单图 ${state.menuScanItemId}` : `上传图 ${imageDataLabel(imageForAnalyze)}`}`;
-    const response = await fetch("/api/analyze", {
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json",
-        "X-SafePlate-Request": String(requestId)
-      },
-      body:JSON.stringify({
-        image:imageForAnalyze,
-        menuImageId:state.menuScanItemId || "",
-        allergens:profile ? profile.allergens : [],
-        menuItems:getEnabledSchoolMenuItems(),
-        menuScanItem:activeMenuScanItem
-      }),
-      signal:controller.signal
-    });
+    const response = await postAnalyzeRequest({
+      image:imageForAnalyze,
+      menuImageId:state.menuScanItemId || "",
+      allergens:profile ? profile.allergens : [],
+      menuItems:getEnabledSchoolMenuItems(),
+      menuScanItem:activeMenuScanItem
+    }, requestId, controller.signal);
     const result = await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(`${result.error || "AI 分析失败"}（HTTP ${response.status}｜${requestDebug}）`);
+    if(!response.ok) throw new Error(`${result.error || "AI 分析失败"}（HTTP ${response.status}｜${response.transport || "fetch"}｜${requestDebug}）`);
+    if(response.transport === "xhr"){
+      showToast("备用通道识别成功");
+    }
     if(requestId !== analysisRequestSeq){
       return {ok:false, stale:true, error:"已有新的分析结果，本次旧请求已忽略"};
     }
