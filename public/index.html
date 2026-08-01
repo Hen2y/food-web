@@ -612,7 +612,25 @@
       flex:0 0 auto;
     }
     .auto-banner.warn{background:linear-gradient(135deg,#f0a429,#e86f39)}
-    .auto-banner.danger{background:linear-gradient(135deg,#df4f4f,#a62f5e)}
+    .auto-banner.danger{
+      background:linear-gradient(135deg,#ff2d2d,#941818);
+      border:2px solid rgba(255,255,255,.72);
+      box-shadow:0 0 0 6px rgba(255,45,45,.22),0 22px 60px rgba(120,0,0,.48);
+      animation:dangerPulse 1s ease-in-out infinite;
+    }
+    .auto-banner.danger strong{font-size:24px;letter-spacing:.02em}
+    .auto-banner.danger span{font-size:16px;color:#fff;font-weight:850}
+    .auto-banner.danger .auto-countdown{
+      width:76px;
+      height:76px;
+      border-radius:18px;
+      font-size:36px;
+      background:rgba(255,255,255,.24);
+    }
+    @keyframes dangerPulse{
+      0%,100%{transform:scale(1);filter:saturate(1)}
+      50%{transform:scale(1.012);filter:saturate(1.28)}
+    }
     .auto-hud{
       display:none;
       position:absolute;
@@ -1932,14 +1950,14 @@
                     </div>
                     <div class="field">
                       <label>餐盘稳定秒数</label>
-                      <input id="autoStableSeconds" type="number" min="1" max="10" value="4" />
+                      <input id="autoStableSeconds" type="number" min="0.8" max="6" value="2" step="0.2" />
                     </div>
                   </div>
-                  <p class="mini">打开自动模式后会常驻摄像头；画面检测到餐盘/饭菜稳定数秒后自动拍照识别。AI 风险分数低于阈值会自动继续，高于或等于阈值需要人工确认。</p>
+                  <p class="mini">打开自动模式后会常驻摄像头；传送带场景下，系统会快速确认餐盘/饭菜进入画面中央后自动拍照识别。AI 风险分数低于阈值会快速放行，高于或等于阈值会醒目报警并等待人工确认。</p>
                   <div class="mode-tips">
                     <div class="mode-tip"><strong>餐盘居中</strong>减少空画面误拍</div>
-                    <div class="mode-tip"><strong>稳定等待</strong>默认等待 4 秒再拍</div>
-                    <div class="mode-tip"><strong>高风险暂停</strong>需要人工确认后继续</div>
+                    <div class="mode-tip"><strong>传送带速度</strong>默认约 2 秒确认后拍照</div>
+                    <div class="mode-tip"><strong>高风险报警</strong>红色大提示，人工确认后继续</div>
                   </div>
                   <div class="auto-actions">
                     <button class="btn btn-primary" id="autoStartBtn" onclick="startAutoMode()">开启自动模式</button>
@@ -2145,7 +2163,7 @@
 
 <script>
 const state = {
-  dataVersion: 8,
+  dataVersion: 9,
   image: "",
   analyzed: false,
   risk: "low",
@@ -2371,18 +2389,18 @@ const autoState = {
   resultTimer: null,
   phase: "off",
   threshold: 50,
-  stableMs: 5000,
-  resultMs: 5000,
-  clearMs: 1600,
+  stableMs: 2000,
+  resultMs: 2500,
+  clearMs: 900,
   cooldownMs: 0,
-  apiCooldownMs: 3000,
-  mealPresenceThreshold: 74,
-  centerFoodThreshold: 52,
-  minFoodLikeRatio: 0.12,
-  minCenterFoodLikeRatio: 0.13,
-  minCenterColorfulRatio: 0.18,
-  minPlateLikeScore: 18,
-  minFrameChange: 12,
+  apiCooldownMs: 1000,
+  mealPresenceThreshold: 68,
+  centerFoodThreshold: 46,
+  minFoodLikeRatio: 0.10,
+  minCenterFoodLikeRatio: 0.11,
+  minCenterColorfulRatio: 0.14,
+  minPlateLikeScore: 14,
+  minFrameChange: 9,
   stableSince: 0,
   clearSince: 0,
   waitNextSince: 0,
@@ -3385,8 +3403,8 @@ async function startAutoMode(){
     showToast("风险阈值请填写 0-100");
     return;
   }
-  if(!Number.isFinite(stableSeconds) || stableSeconds < 1 || stableSeconds > 10){
-    showToast("稳定秒数请填写 1-10");
+  if(!Number.isFinite(stableSeconds) || stableSeconds < .8 || stableSeconds > 6){
+    showToast("稳定秒数请填写 0.8-6");
     return;
   }
   prepareAutoProjectionWaiting();
@@ -3417,10 +3435,10 @@ async function startAutoMode(){
     document.getElementById("autoStartBtn").disabled = true;
     document.getElementById("autoStopBtn").disabled = false;
     document.getElementById("autoConfirmBtn").style.display = "none";
-    showAutoBanner("safe", "自动模式已开启", `风险阈值 ${threshold}｜额度保护已开启｜等待餐盘进入画面`, "");
-    updateAutoStatus("waitingPlate", `自动模式已开启：风险阈值 ${threshold}，额度保护已开启，等待餐盘进入画面`);
+    showAutoBanner("safe", "传送带自动模式已开启", `风险阈值 ${threshold}｜稳定 ${stableSeconds} 秒拍照｜等待餐盘进入画面`, "");
+    updateAutoStatus("waitingPlate", `传送带自动模式：风险阈值 ${threshold}，稳定 ${stableSeconds} 秒后拍照`);
     refreshCameraDevices();
-    autoState.monitorTimer = setInterval(monitorAutoFrame, 500);
+    autoState.monitorTimer = setInterval(monitorAutoFrame, 250);
   }catch(error){
     if(stream) stream.getTracks().forEach(track=>track.stop());
     if(autoState.stream && autoState.stream !== stream) autoState.stream.getTracks().forEach(track=>track.stop());
@@ -3781,8 +3799,8 @@ async function captureAndAnalyzeAuto(){
     autoState.phase = "needsConfirm";
     autoState.busy = false;
     document.getElementById("autoConfirmBtn").style.display = "inline-flex";
-    const highMessage = `风险分 ${state.score} 达到阈值 ${autoState.threshold}，请人工确认后继续`;
-    showAutoBanner("danger", "识别完成：需要人工确认", highMessage, "!");
+    const highMessage = `风险分 ${state.score} ≥ 阈值 ${autoState.threshold}。请立即拦下本盘，人工确认过敏原/异物后再放行。`;
+    showAutoBanner("danger", "🚨 高风险：立即停餐复核", highMessage, "!");
     updateAutoStatus("needsConfirm", highMessage);
   }
 }
